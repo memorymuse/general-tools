@@ -1,0 +1,11 @@
+Issues to fix in filedetective-design-and-impl-plan.md:
+
+1. Lines 821-835: Change "filedetective" → "filedet" in manual testing
+2. Line 189: Fix header "Code Files: Enhanced Stats" to match pattern
+3. Line 191: Remove reference to "--fxns flag"
+4. Lines 265, 270, 273: Remove "PST" from timestamps (24-hour is clear enough)
+5. Line 286: Remove "PST" from date format specification
+6. Line 502-503: Remove "search_only" parameter (doesn't exist in new design)
+7. Lines 624, 887: Remove references to "--fxns", "--search-only", "--search-terms"
+8. Lines 899-903: Change "--toc" and "--fxns" to "-o"
+9. Line 999: Change version "v1.0" to "v1.1"

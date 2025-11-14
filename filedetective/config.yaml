@@ -1,0 +1,55 @@
+# FileDetective Configuration
+# Search directories with priority (1 = highest)
+
+search_directories:
+  - priority: 1
+    path: ~/projects/muse-v1
+    description: "Current work (muse-v1)"
+    recursive: true
+
+  - priority: 2
+    path: ~/projects
+    description: "General projects"
+    recursive: true
+    exclude:
+      - muse-v1
+      - muse-v0
+
+  - priority: 3
+    path: ~/.claude
+    description: "User configuration"
+    recursive: true
+
+  - priority: 4
+    path: ~/projects/muse-v0
+    description: "Legacy work (muse-v0)"
+    recursive: true
+
+# Directories to skip during search
+skip_directories:
+  - .git
+  - node_modules
+  - .venv
+  - venv
+  - __pycache__
+  - .pytest_cache
+  - .mypy_cache
+  - .ruff_cache
+  - .idea
+  - .vscode
+
+# File patterns to skip
+skip_patterns:
+  - "*.pyc"
+  - "*.pyo"
+  - "*.pyd"
+  - ".DS_Store"
+  - "*.swp"
+  - "*.swo"
+  - "*~"
+
+# Default settings
+defaults:
+  max_file_size_mb: 10
+  context_lines: 2  # For grep mode
+  date_format: "%y.%m.%d %H:%M"  # 25.11.07 13:45
