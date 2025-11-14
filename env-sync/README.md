@@ -24,8 +24,13 @@ cc-isolate unmount
 # Check status
 cc-isolate status
 
-# Sync dotfiles
+# Sync dotfiles locally (create symlinks)
 cc-isolate dotfiles sync
+
+# Git sync - Push/Pull to GitHub
+cc-isolate dotfiles push      # Push dotfiles to GitHub
+cc-isolate sync pull          # Pull everything from GitHub
+cc-isolate sync status        # Check what needs to be pushed
 ```
 
 ### Activate in Current Shell
@@ -51,8 +56,20 @@ export BASH_ENV=$PWD/.cc-env
 git clone <repo-url>
 cd general-tools/env-sync
 ./install.sh
+cc-isolate sync pull         # Pull and sync everything
 cc-isolate mount
-cc-isolate dotfiles sync
+```
+
+**Push changes to GitHub:**
+```bash
+# Edit your dotfiles
+vim ~/.gitconfig
+
+# Push just dotfiles
+cc-isolate dotfiles push "Update gitconfig"
+
+# Or push everything (dotfiles + profiles + config)
+cc-isolate sync push "Update environment"
 ```
 
 **Create project-specific profile:**
@@ -74,6 +91,7 @@ cc-isolate mount web-dev
   - [Mounting & Unmounting](#mounting--unmounting)
   - [Profiles](#profiles)
   - [Dotfile Management](#dotfile-management)
+  - [Git Synchronization](#git-synchronization)
   - [Configuration](#configuration)
 - [Cross-Platform Support](#cross-platform-support)
 - [Security & Isolation](#security--isolation)
@@ -422,28 +440,146 @@ Managed Dotfiles:
 # Configure which dotfiles to sync
 vim config.sh
 
-# Sync dotfiles to repo
+# Sync dotfiles locally (creates symlinks)
 cc-isolate dotfiles sync
 
-# Commit and push
-git add dotfiles/
-git commit -m "Add dotfiles"
-git push
+# Push to GitHub
+cc-isolate dotfiles push "Initial dotfiles"
 ```
 
 **On Machine 2 (new machine):**
 ```bash
-# Pull latest changes
-git pull
+# Pull from GitHub
+cc-isolate dotfiles pull
 
-# Install
-./install.sh
-
-# Sync dotfiles (creates symlinks)
-cc-isolate dotfiles sync
+# Or pull everything (dotfiles + profiles + config)
+cc-isolate sync pull
 ```
 
-Your dotfiles are now synced! Changes on either machine can be committed and pulled.
+Your dotfiles are now synced! Changes on either machine can be pushed/pulled with cc-isolate commands.
+
+### Git Synchronization
+
+cc-isolate includes integrated Git commands for seamless synchronization across machines. All sync commands operate on the **same exact files** (dotfiles/, profiles/, bashrc.d/, config.sh) to ensure consistency.
+
+#### Push Dotfiles Only
+
+```bash
+# Edit a dotfile (changes auto-save to repo via symlinks)
+vim ~/.gitconfig
+
+# Push just dotfiles to GitHub
+cc-isolate dotfiles push
+cc-isolate dotfiles push "Update gitconfig"
+```
+
+This commits and pushes only files in `dotfiles/`.
+
+#### Pull Dotfiles Only
+
+```bash
+# Pull and re-sync dotfiles from GitHub
+cc-isolate dotfiles pull
+```
+
+This pulls changes and automatically re-creates symlinks.
+
+#### Push Everything
+
+```bash
+# Edit profile or config
+vim profiles/global/bashrc
+vim config.sh
+
+# Push all changes (dotfiles + profiles + config)
+cc-isolate sync push
+cc-isolate sync push "Update environment settings"
+```
+
+This commits and pushes changes in:
+- `dotfiles/`
+- `profiles/`
+- `bashrc.d/`
+- `config.sh`
+
+#### Pull Everything
+
+```bash
+# Pull all changes from GitHub
+cc-isolate sync pull
+```
+
+This pulls and automatically:
+- Re-syncs dotfiles (creates symlinks)
+- Reloads configuration
+- Suggests remounting if currently mounted
+
+#### Check Sync Status
+
+```bash
+# See what needs to be pushed
+cc-isolate sync status
+```
+
+Output:
+```
+Git Repository Status:
+
+  Branch:         main
+  Remote:         https://github.com/user/repo.git
+  Last commit:    abc1234 - Update gitconfig (2 hours ago)
+
+Pending Changes:
+
+  M  dotfiles/.gitconfig
+  M  profiles/global/bashrc
+  ?  dotfiles/.vimrc
+
+ℹ To push changes: cc-isolate sync push
+```
+
+#### Conflict Handling
+
+If you have uncommitted changes when pulling, cc-isolate will:
+1. Warn you about uncommitted changes
+2. Offer to stash them automatically
+3. Pull the changes
+4. You can restore stashed changes with `git stash pop`
+
+```bash
+$ cc-isolate sync pull
+⚠ You have uncommitted changes
+Stash changes and pull? [y/N] y
+ℹ Stashing changes...
+✓ Changes stashed
+ℹ Pulling from remote...
+✓ Pulled from remote
+```
+
+#### Complete Workflow Between Machines
+
+**Machine 1 (edit and push):**
+```bash
+# Make changes
+vim ~/.gitconfig
+vim profiles/global/bashrc
+
+# Check status
+cc-isolate sync status
+
+# Push to GitHub
+cc-isolate sync push "Update config and profile"
+```
+
+**Machine 2 (pull and apply):**
+```bash
+# Pull changes
+cc-isolate sync pull
+
+# If mounted, remount to apply changes
+cc-isolate unmount
+cc-isolate mount
+```
 
 ### Configuration
 

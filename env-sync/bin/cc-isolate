@@ -561,8 +561,14 @@ ${BOLD}COMMANDS:${RESET}
   ${CYAN}profile create <name>${RESET} Create a new profile
   ${CYAN}profile delete <name>${RESET} Delete a profile
 
-  ${CYAN}dotfiles sync${RESET}         Sync dotfiles
+  ${CYAN}dotfiles sync${RESET}         Sync dotfiles locally (create symlinks)
   ${CYAN}dotfiles list${RESET}         List managed dotfiles
+  ${CYAN}dotfiles push [msg]${RESET}   Commit and push dotfiles to GitHub
+  ${CYAN}dotfiles pull${RESET}         Pull dotfiles from GitHub and re-sync
+
+  ${CYAN}sync push [msg]${RESET}       Push all changes to GitHub
+  ${CYAN}sync pull${RESET}             Pull all changes from GitHub
+  ${CYAN}sync status${RESET}           Show git repository status
 
   ${CYAN}config${RESET}                Show current configuration
   ${CYAN}help${RESET}                  Show this help message
@@ -578,8 +584,17 @@ ${BOLD}EXAMPLES:${RESET}
   # Check status
   cc-isolate status
 
-  # Sync dotfiles
+  # Sync dotfiles locally
   cc-isolate dotfiles sync
+
+  # Push dotfiles to GitHub
+  cc-isolate dotfiles push "Update gitconfig"
+
+  # Pull everything from GitHub
+  cc-isolate sync pull
+
+  # Check what needs to be pushed
+  cc-isolate sync status
 
   # Create a new profile
   cc-isolate profile create web-dev
@@ -646,6 +661,287 @@ cmd_dotfiles_list() {
 }
 
 #------------------------------------------------------------------------------
+# Git Sync Functions
+#------------------------------------------------------------------------------
+
+# Check if we're in a git repository
+check_git_repo() {
+    if ! git -C "$ENV_SYNC_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+        die "Not a git repository. Cannot sync."
+    fi
+}
+
+# Get modified files in specific directories
+get_modified_files() {
+    local paths=("$@")
+    git -C "$ENV_SYNC_ROOT" status --porcelain "${paths[@]}" 2>/dev/null || true
+}
+
+cmd_dotfiles_push() {
+    print_header
+    check_git_repo
+
+    local message="${1:-Update dotfiles}"
+
+    log_info "Pushing dotfiles to remote repository"
+    echo
+
+    # Check if there are changes in dotfiles
+    cd "$ENV_SYNC_ROOT"
+
+    local changes=$(get_modified_files "dotfiles/")
+
+    if [[ -z "$changes" ]]; then
+        log_info "No changes to push in dotfiles/"
+        return 0
+    fi
+
+    log_info "Changes detected:"
+    echo "$changes" | sed 's/^/  /'
+    echo
+
+    # Add dotfiles
+    log_info "Staging dotfiles..."
+    git add dotfiles/
+    log_success "Staged"
+
+    # Commit
+    log_info "Committing changes..."
+    git commit -m "$message"
+    log_success "Committed"
+
+    # Push
+    log_info "Pushing to remote..."
+    if git push; then
+        log_success "Pushed to remote"
+        echo
+        log_success "${BOLD}Dotfiles synced to repository!${RESET}"
+    else
+        log_error "Failed to push to remote"
+        return 1
+    fi
+    echo
+}
+
+cmd_dotfiles_pull() {
+    print_header
+    check_git_repo
+
+    log_info "Pulling dotfiles from remote repository"
+    echo
+
+    cd "$ENV_SYNC_ROOT"
+
+    # Check for uncommitted changes
+    if ! git diff-index --quiet HEAD -- dotfiles/ 2>/dev/null; then
+        log_warn "You have uncommitted changes in dotfiles/"
+        read -p "Stash changes and pull? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Stashing changes..."
+            git stash push -m "cc-isolate: Auto-stash before pull" dotfiles/
+            log_success "Changes stashed"
+        else
+            log_error "Cannot pull with uncommitted changes"
+            return 1
+        fi
+    fi
+
+    # Pull
+    log_info "Pulling from remote..."
+    if git pull; then
+        log_success "Pulled from remote"
+        echo
+
+        # Re-sync dotfiles
+        log_info "Re-syncing dotfiles..."
+        cmd_dotfiles_sync
+
+        log_success "${BOLD}Dotfiles synced from repository!${RESET}"
+    else
+        log_error "Failed to pull from remote"
+        return 1
+    fi
+    echo
+}
+
+cmd_sync_push() {
+    print_header
+    check_git_repo
+
+    local message="${1:-Update cc-isolate environment}"
+
+    log_info "Pushing environment to remote repository"
+    echo
+
+    cd "$ENV_SYNC_ROOT"
+
+    # Check for changes in key directories
+    local changes=$(get_modified_files "dotfiles/" "profiles/" "bashrc.d/" "config.sh")
+
+    if [[ -z "$changes" ]]; then
+        log_info "No changes to push"
+        return 0
+    fi
+
+    log_info "Changes detected:"
+    echo "$changes" | sed 's/^/  /'
+    echo
+
+    # Add all relevant files
+    log_info "Staging changes..."
+    git add dotfiles/ profiles/ bashrc.d/ config.sh 2>/dev/null || true
+    log_success "Staged"
+
+    # Commit
+    log_info "Committing changes..."
+    if git commit -m "$message"; then
+        log_success "Committed"
+
+        # Push
+        log_info "Pushing to remote..."
+        if git push; then
+            log_success "Pushed to remote"
+            echo
+            log_success "${BOLD}Environment synced to repository!${RESET}"
+        else
+            log_error "Failed to push to remote"
+            return 1
+        fi
+    else
+        log_warn "No changes to commit (already up to date)"
+    fi
+    echo
+}
+
+cmd_sync_pull() {
+    print_header
+    check_git_repo
+
+    log_info "Pulling environment from remote repository"
+    echo
+
+    cd "$ENV_SYNC_ROOT"
+
+    # Check for uncommitted changes
+    local dirs=("dotfiles/" "profiles/" "bashrc.d/" "config.sh")
+    local has_changes=false
+
+    for dir in "${dirs[@]}"; do
+        if ! git diff-index --quiet HEAD -- "$dir" 2>/dev/null; then
+            has_changes=true
+            break
+        fi
+    done
+
+    if $has_changes; then
+        log_warn "You have uncommitted changes"
+        read -p "Stash changes and pull? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Stashing changes..."
+            git stash push -m "cc-isolate: Auto-stash before pull" "${dirs[@]}"
+            log_success "Changes stashed"
+        else
+            log_error "Cannot pull with uncommitted changes"
+            return 1
+        fi
+    fi
+
+    # Pull
+    log_info "Pulling from remote..."
+    if git pull; then
+        log_success "Pulled from remote"
+        echo
+
+        # Re-sync dotfiles
+        log_info "Re-syncing dotfiles..."
+        cmd_dotfiles_sync
+
+        # Reload config
+        if [[ -f "$CONFIG_FILE" ]]; then
+            source "$CONFIG_FILE"
+            log_success "Reloaded configuration"
+        fi
+
+        # If mounted, suggest remount
+        if is_mounted; then
+            echo
+            log_warn "Isolation is currently mounted"
+            log_info "Consider remounting to apply changes:"
+            echo -e "  ${CYAN}cc-isolate unmount && cc-isolate mount$(get_current_profile)${RESET}"
+        fi
+
+        echo
+        log_success "${BOLD}Environment synced from repository!${RESET}"
+    else
+        log_error "Failed to pull from remote"
+        return 1
+    fi
+    echo
+}
+
+cmd_sync_status() {
+    print_header
+    check_git_repo
+
+    cd "$ENV_SYNC_ROOT"
+
+    echo -e "${BOLD}Git Repository Status:${RESET}"
+    echo
+
+    # Show current branch
+    local branch=$(git branch --show-current 2>/dev/null || echo "unknown")
+    echo -e "  Branch:         ${CYAN}${branch}${RESET}"
+
+    # Show remote
+    local remote=$(git remote get-url origin 2>/dev/null || echo "none")
+    echo -e "  Remote:         ${remote}"
+
+    # Show last commit
+    local last_commit=$(git log -1 --format="%h - %s (%ar)" 2>/dev/null || echo "none")
+    echo -e "  Last commit:    ${last_commit}"
+
+    echo
+    echo -e "${BOLD}Pending Changes:${RESET}"
+    echo
+
+    # Check for changes
+    local changes=$(get_modified_files "dotfiles/" "profiles/" "bashrc.d/" "config.sh")
+
+    if [[ -z "$changes" ]]; then
+        log_success "No pending changes"
+    else
+        echo "$changes" | while IFS= read -r line; do
+            local status="${line:0:2}"
+            local file="${line:3}"
+
+            case "$status" in
+                "M ")
+                    echo -e "  ${YELLOW}M${RESET}  $file"
+                    ;;
+                "A ")
+                    echo -e "  ${GREEN}A${RESET}  $file"
+                    ;;
+                "D ")
+                    echo -e "  ${RED}D${RESET}  $file"
+                    ;;
+                "??")
+                    echo -e "  ${BLUE}?${RESET}  $file"
+                    ;;
+                *)
+                    echo -e "     $file"
+                    ;;
+            esac
+        done
+
+        echo
+        log_info "To push changes: ${CYAN}cc-isolate sync push${RESET}"
+    fi
+    echo
+}
+
+#------------------------------------------------------------------------------
 # Main Entry Point
 #------------------------------------------------------------------------------
 
@@ -691,8 +987,32 @@ main() {
                 list)
                     cmd_dotfiles_list
                     ;;
+                push)
+                    cmd_dotfiles_push "$@"
+                    ;;
+                pull)
+                    cmd_dotfiles_pull
+                    ;;
                 *)
                     die "Unknown dotfiles command: $subcommand"
+                    ;;
+            esac
+            ;;
+        sync)
+            local subcommand="${1:-status}"
+            shift || true
+            case "$subcommand" in
+                push)
+                    cmd_sync_push "$@"
+                    ;;
+                pull)
+                    cmd_sync_pull
+                    ;;
+                status)
+                    cmd_sync_status
+                    ;;
+                *)
+                    die "Unknown sync command: $subcommand"
                     ;;
             esac
             ;;
