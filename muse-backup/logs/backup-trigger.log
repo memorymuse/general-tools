@@ -112,3 +112,21 @@
 [2025-11-14 00:21:28] Backup(s) started in background (PID: 614910)
 [2025-11-14 00:21:28] Starting daily backup...
 [2025-11-14 00:22:00] Daily backup completed successfully
+[2025-11-19 11:37:33] Daily backup needed (no marker for today)
+[2025-11-19 11:37:33] Monthly backup needed (no marker for this month)
+[2025-11-19 11:37:33] Starting daily backup...
+[2025-11-19 11:37:33] Backup(s) started in background (PID: 996)
+[2025-11-19 11:37:33] Daily backup needed (no marker for today)
+[2025-11-19 11:37:33] Monthly backup needed (no marker for this month)
+[2025-11-19 11:37:33] Backup(s) started in background (PID: 1068)
+[2025-11-19 11:37:33] Starting daily backup...
+[2025-11-19 11:38:02] ERROR: Daily backup failed
+[2025-11-19 11:38:02] Starting monthly backup...
+[2025-11-19 11:38:04] Daily backup completed successfully
+[2025-11-19 11:38:04] Starting monthly backup...
+[2025-11-19 11:38:32] Monthly backup needed (no marker for this month)
+[2025-11-19 11:38:32] Backup(s) started in background (PID: 2027)
+[2025-11-19 11:38:32] Starting monthly backup...
+[2025-11-19 11:41:51] Monthly backup completed successfully
+[2025-11-19 11:41:52] Monthly backup completed successfully
+[2025-11-19 11:42:14] Monthly backup completed successfully

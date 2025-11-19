@@ -193,3 +193,51 @@ total size is 66.98M  speedup is 1.00
 [2025-11-12 10:48:58] ========== Monthly Full Backup Completed ==========
 [2025-11-12 10:48:58] Backup size: 1.1G
 [2025-11-12 10:48:58] Duration: 268s
+[2025-11-19 11:38:02] ========== Monthly Full Backup Started ==========
+[2025-11-19 11:38:02] Backup directory: /mnt/g/muse-backup/2025-11/full-20251119-113802
+[2025-11-19 11:38:02] Created backup directory
+[2025-11-19 11:38:02] Backing up muse-v0...
+[2025-11-19 11:38:02] Loaded 51 exclude patterns from /home/kysonk/projects/general_tools/muse-backup/configs/muse-v0-monthly.json
+[2025-11-19 11:38:04] ========== Monthly Full Backup Started ==========
+[2025-11-19 11:38:04] Backup directory: /mnt/g/muse-backup/2025-11/full-20251119-113804
+[2025-11-19 11:38:04] Created backup directory
+[2025-11-19 11:38:04] Backing up muse-v0...
+[2025-11-19 11:38:04] Loaded 51 exclude patterns from /home/kysonk/projects/general_tools/muse-backup/configs/muse-v0-monthly.json
+[2025-11-19 11:38:32] ========== Monthly Full Backup Started ==========
+[2025-11-19 11:38:32] Backup directory: /mnt/g/muse-backup/2025-11/full-20251119-113832
+[2025-11-19 11:38:32] Created backup directory
+[2025-11-19 11:38:32] Backing up muse-v0...
+[2025-11-19 11:38:32] Loaded 51 exclude patterns from /home/kysonk/projects/general_tools/muse-backup/configs/muse-v0-monthly.json
+sent 1.04G bytes  received 186.39K bytes  5.13M bytes/sec
+total size is 1.04G  speedup is 1.00
+[2025-11-19 11:41:24] muse-v0 backup completed
+[2025-11-19 11:41:24] Backing up muse-v1...
+[2025-11-19 11:41:24] Loaded 51 exclude patterns from /home/kysonk/projects/general_tools/muse-backup/configs/muse-v1-monthly.json
+sent 1.04G bytes  received 186.44K bytes  5.16M bytes/sec
+total size is 1.04G  speedup is 1.00
+[2025-11-19 11:41:25] muse-v0 backup completed
+[2025-11-19 11:41:25] Backing up muse-v1...
+[2025-11-19 11:41:25] Loaded 51 exclude patterns from /home/kysonk/projects/general_tools/muse-backup/configs/muse-v1-monthly.json
+sent 67.45M bytes  received 22.08K bytes  3.65M bytes/sec
+total size is 67.33M  speedup is 1.00
+[2025-11-19 11:41:43] muse-v1 backup completed
+sent 67.45M bytes  received 22.08K bytes  3.65M bytes/sec
+total size is 67.33M  speedup is 1.00
+[2025-11-19 11:41:43] muse-v1 backup completed
+sent 1.04G bytes  received 186.42K bytes  5.21M bytes/sec
+total size is 1.04G  speedup is 1.00
+[2025-11-19 11:41:51] muse-v0 backup completed
+[2025-11-19 11:41:51] Backing up muse-v1...
+[2025-11-19 11:41:51] Loaded 51 exclude patterns from /home/kysonk/projects/general_tools/muse-backup/configs/muse-v1-monthly.json
+[2025-11-19 11:41:51] ========== Monthly Full Backup Completed ==========
+[2025-11-19 11:41:51] Backup size: 1.1G
+[2025-11-19 11:41:51] Duration: 221s
+[2025-11-19 11:41:52] ========== Monthly Full Backup Completed ==========
+[2025-11-19 11:41:52] Backup size: 1.1G
+[2025-11-19 11:41:52] Duration: 219s
+sent 67.45M bytes  received 22.08K bytes  4.35M bytes/sec
+total size is 67.33M  speedup is 1.00
+[2025-11-19 11:42:07] muse-v1 backup completed
+[2025-11-19 11:42:14] ========== Monthly Full Backup Completed ==========
+[2025-11-19 11:42:14] Backup size: 1.1G
+[2025-11-19 11:42:14] Duration: 215s
