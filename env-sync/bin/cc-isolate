@@ -53,6 +53,15 @@ SECRET_SCAN_AUTO_INSTALL="${SECRET_SCAN_AUTO_INSTALL:-true}"
 SECRET_BLOCK_PUSH="${SECRET_BLOCK_PUSH:-true}"
 SECRET_CREATE_TEMPLATES="${SECRET_CREATE_TEMPLATES:-true}"
 
+# 1Password CLI configuration
+CC_ISOLATE_1PASSWORD_ENABLED="${CC_ISOLATE_1PASSWORD_ENABLED:-true}"
+CC_ISOLATE_1PASSWORD_AUTO_SIGNIN="${CC_ISOLATE_1PASSWORD_AUTO_SIGNIN:-false}"
+CC_ISOLATE_1PASSWORD_ACCOUNT="${CC_ISOLATE_1PASSWORD_ACCOUNT:-}"
+
+# UI configuration
+CC_ISOLATE_PROMPT_ENABLED="${CC_ISOLATE_PROMPT_ENABLED:-true}"
+CC_ISOLATE_SHOW_WELCOME="${CC_ISOLATE_SHOW_WELCOME:-false}"
+
 #------------------------------------------------------------------------------
 # Helper Functions
 #------------------------------------------------------------------------------

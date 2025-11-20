@@ -99,6 +99,7 @@ cc-isolate mount web-dev
   - [Configuration](#configuration)
 - [Cross-Platform Support](#cross-platform-support)
 - [Secret Scanning & Protection](#secret-scanning--protection)
+- [1Password Integration](#1password-integration)
 - [Security & Isolation](#security--isolation)
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
@@ -898,6 +899,459 @@ cc-isolate secrets scan dotfiles
 # If false positive, whitelist
 # If real secret, remove or use template
 ```
+
+---
+
+## 1Password Integration
+
+cc-isolate includes seamless integration with 1Password CLI for secure secret management. This is the **recommended approach** for handling secrets in your dotfiles and scripts.
+
+### Why 1Password?
+
+**Templates for Structure, 1Password for Secrets**
+- Templates (with `YOUR_*_HERE` placeholders) define configuration structure → synced via git
+- 1Password stores actual secret values → never touch git
+- Shell plugin provides secrets at runtime → transparent to tools
+
+**Benefits:**
+- ✅ Secrets never stored in files or environment variables
+- ✅ Works seamlessly with existing tools (git, aws, gh, etc.)
+- ✅ Biometric authentication (Touch ID, Windows Hello)
+- ✅ Secrets available across all your machines
+- ✅ Compatible with .envrc inheritance pattern
+- ✅ Zero changes to existing workflows
+
+### Installation
+
+#### 1. Install 1Password Desktop App
+
+Download from [1password.com/downloads](https://1password.com/downloads)
+
+**Supported platforms:**
+- macOS (Intel & Apple Silicon)
+- Windows (with WSL support)
+- Linux
+
+#### 2. Install 1Password CLI
+
+**macOS:**
+```bash
+brew install --cask 1password-cli
+```
+
+**Linux/WSL:**
+```bash
+# Download and install
+curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+  sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | \
+  sudo tee /etc/apt/sources.list.d/1password.list
+
+sudo apt update && sudo apt install 1password-cli
+```
+
+**Verify installation:**
+```bash
+op --version
+```
+
+#### 3. Enable CLI Integration in Desktop App
+
+1. Open 1Password desktop app
+2. Go to **Settings → Developer**
+3. Enable **"Integrate with 1Password CLI"**
+4. Enable **"Connect with 1Password CLI"** (for biometric unlock)
+
+#### 4. Configure cc-isolate
+
+The global bashrc automatically initializes 1Password when available.
+
+**Optional configuration** in `config.sh`:
+```bash
+# Enable/disable 1Password integration
+CC_ISOLATE_1PASSWORD_ENABLED=true
+
+# Auto-signin when session expires (not needed with desktop app)
+CC_ISOLATE_1PASSWORD_AUTO_SIGNIN=false
+
+# Default account (leave empty to use default)
+CC_ISOLATE_1PASSWORD_ACCOUNT=""
+```
+
+### Usage
+
+#### Shell Plugin (Recommended)
+
+The shell plugin automatically injects secrets when tools run.
+
+**How it works:**
+```bash
+# 1Password initialized automatically when shell starts
+# (via profiles/global/bashrc)
+
+# Tools authenticate automatically - no code changes needed!
+git push                  # 1Password provides GitHub token
+aws s3 ls                # 1Password provides AWS credentials
+gh api user              # 1Password provides GitHub token
+```
+
+**Supported tools:**
+- Git (GitHub, GitLab, Bitbucket tokens)
+- AWS CLI (access keys, session tokens)
+- GitHub CLI (gh)
+- Docker (registry authentication)
+- SSH (SSH key passphrases)
+- Terraform (cloud provider credentials)
+- And 60+ more...
+
+See [full list of supported tools](https://developer.1password.com/docs/cli/shell-plugins/supported-tools/)
+
+#### Manual Secret Injection
+
+**Read secrets directly:**
+```bash
+# In your bashrc or scripts
+export API_KEY="$(op read 'op://Private/MyApp/api_key')"
+export DB_PASSWORD="$(op read 'op://Private/Database/password')"
+```
+
+**Inject into command:**
+```bash
+# One-off commands
+op run -- myapp
+# Secrets from .env referenced as op:// URIs are injected
+
+op run --env-file=.env -- npm start
+# All environment variables with op:// references resolved
+```
+
+**Template syntax in .env:**
+```bash
+# .env (gitignored)
+API_KEY="op://Private/MyApp/api_key"
+DB_URL="op://Private/Database/connection_string"
+GITHUB_TOKEN="op://Private/GitHub/personal_access_token"
+```
+
+### Integration with .envrc
+
+If you use per-directory `.envrc` files (with parent inheritance), 1Password works seamlessly:
+
+**Root .envrc** (e.g., `~/projects/.envrc`):
+```bash
+# Initialize 1Password (inherits to all child directories)
+eval "$(op plugin run -- --init bash)"
+```
+
+**Project .envrc** (e.g., `~/projects/myapp/.envrc`):
+```bash
+# Inherits 1Password from parent
+# Add project-specific variables
+export PROJECT_NAME="myapp"
+export NODE_ENV="development"
+```
+
+**Key points:**
+- 1Password initialized once at root level
+- All subdirectories inherit the plugin
+- Works automatically with Claude Code
+- No global environment pollution
+
+### Claude Code Compatibility
+
+**Does Claude Code inherit 1Password initialization?**
+
+Yes, with the cc-isolate global bashrc configuration. Here's how:
+
+1. **Global bashrc initializes 1Password:**
+   ```bash
+   # profiles/global/bashrc (auto-sourced by cc-isolate)
+   if command -v op >/dev/null 2>&1; then
+       eval "$(op plugin run -- --init bash)"
+   fi
+   ```
+
+2. **Claude Code launches with cc-isolate environment:**
+   ```bash
+   # In your shell startup or per-directory .envrc
+   export BASH_ENV=/path/to/env-sync/.cc-env
+   ```
+
+3. **Every Claude Code bash session:**
+   - Sources global bashrc
+   - Initializes 1Password plugin
+   - Tools auto-authenticate
+   - Works with your .envrc inheritance pattern
+
+**Workflow:**
+```bash
+# Directory structure
+~/projects/
+  .envrc                    # (Optional) Initialize 1Password at root
+  myapp/
+    .envrc                  # Inherits from parent, adds project vars
+
+# Launch Claude Code
+cd ~/projects/myapp
+claude-code .
+
+# Claude Code bash sessions automatically have:
+# ✓ 1Password plugin initialized
+# ✓ Parent .envrc loaded
+# ✓ Project .envrc loaded
+# ✓ Tools auto-authenticate
+```
+
+### Common Workflows
+
+#### Setting Up Git Authentication
+
+**1. Add GitHub token to 1Password:**
+- Create item in 1Password: "GitHub Personal Access Token"
+- Add field: `token` with your PAT value
+
+**2. Configure git to use 1Password:**
+```bash
+# Let shell plugin handle it automatically
+git config --global credential.helper ""
+
+# Or configure explicitly
+git config --global credential.helper "!gh auth git-credential"
+```
+
+**3. Push to GitHub:**
+```bash
+git push
+# 1Password prompts for biometric authentication
+# Token automatically injected
+# Push succeeds
+```
+
+#### Setting Up AWS Credentials
+
+**1. Store credentials in 1Password:**
+- Create item: "AWS Credentials"
+- Fields: `access_key_id`, `secret_access_key`
+
+**2. Reference in AWS config:**
+```bash
+# ~/.aws/config (safe to sync)
+[profile myprofile]
+region = us-east-1
+
+# Don't create ~/.aws/credentials - use 1Password instead
+```
+
+**3. Use AWS CLI:**
+```bash
+# Export via 1Password
+export AWS_ACCESS_KEY_ID="$(op read 'op://Private/AWS/access_key_id')"
+export AWS_SECRET_ACCESS_KEY="$(op read 'op://Private/AWS/secret_access_key')"
+
+aws s3 ls
+# Authenticates with 1Password-provided credentials
+```
+
+**Or use shell plugin:**
+```bash
+# With shell plugin, tools auto-detect and use 1Password
+aws s3 ls
+# 1Password provides credentials automatically
+```
+
+#### Managing Multiple Secrets
+
+**Create .env template** (synced via git):
+```bash
+# .env.template
+DATABASE_URL="YOUR_DATABASE_URL_HERE"
+API_KEY="YOUR_API_KEY_HERE"
+STRIPE_SECRET="YOUR_STRIPE_SECRET_HERE"
+```
+
+**Create .env with 1Password references** (gitignored):
+```bash
+# .env (never commit!)
+DATABASE_URL="op://Private/MyApp/database_url"
+API_KEY="op://Private/MyApp/api_key"
+STRIPE_SECRET="op://Private/Stripe/secret_key"
+```
+
+**Run app with secret injection:**
+```bash
+op run --env-file=.env -- npm start
+# All op:// references resolved at runtime
+```
+
+### Configuration Reference
+
+#### Environment Variables
+
+Set in `config.sh` or per-project `.envrc`:
+
+```bash
+# Enable/disable 1Password integration
+CC_ISOLATE_1PASSWORD_ENABLED=true
+
+# Auto-signin (not needed with desktop app integration)
+CC_ISOLATE_1PASSWORD_AUTO_SIGNIN=false
+
+# Default account
+CC_ISOLATE_1PASSWORD_ACCOUNT="my-team.1password.com"
+
+# 1Password CLI settings (optional)
+OP_ACCOUNT="my-team.1password.com"
+OP_SESSION_my_team=""  # Auto-managed by desktop app
+```
+
+#### Global Bashrc Customization
+
+To customize 1Password initialization, edit `profiles/global/bashrc`:
+
+```bash
+# Disable auto-initialization
+CC_ISOLATE_1PASSWORD_ENABLED=false
+
+# Or customize initialization
+if command -v op >/dev/null 2>&1; then
+    # Custom setup
+    eval "$(op plugin run -- --init bash)"
+
+    # Set default account
+    export OP_ACCOUNT="my-team.1password.com"
+fi
+```
+
+### Troubleshooting
+
+#### "op: command not found"
+
+**Solution:**
+```bash
+# Install 1Password CLI
+brew install --cask 1password-cli  # macOS
+
+# Or download from:
+# https://developer.1password.com/docs/cli/get-started/
+```
+
+#### "not signed in" errors
+
+**Solution 1: Enable desktop app integration**
+1. Open 1Password desktop app
+2. Settings → Developer
+3. Enable "Integrate with 1Password CLI"
+
+**Solution 2: Sign in manually**
+```bash
+eval "$(op signin)"
+# Follow biometric authentication prompt
+```
+
+#### "Shell plugin not working"
+
+**Verify initialization:**
+```bash
+# Check if plugin initialized
+echo $OP_PLUGIN_HOME
+# Should output a path like: ~/.op/plugins
+
+# Re-initialize manually
+eval "$(op plugin run -- --init bash)"
+```
+
+#### "Biometric unlock not working"
+
+**Requirements:**
+- 1Password desktop app installed and running
+- CLI integration enabled in desktop app settings
+- Desktop app unlocked at least once
+
+**WSL specific:**
+- Requires 1Password for Windows (not Linux version)
+- Enable WSL integration in Windows app settings
+
+#### "Works in terminal but not in Claude Code"
+
+**Check BASH_ENV:**
+```bash
+# Ensure cc-isolate environment is active
+echo $BASH_ENV
+# Should point to: /path/to/env-sync/.cc-env
+
+# If not set, add to your shell startup:
+export BASH_ENV=/path/to/env-sync/.cc-env
+```
+
+**Verify in Claude Code:**
+```bash
+# In Claude Code bash session
+command -v op
+# Should show: /path/to/op
+
+echo $OP_PLUGIN_HOME
+# Should show plugin directory
+```
+
+### Best Practices
+
+1. **Templates for Structure:**
+   - Commit `.env.template` files with `YOUR_*_HERE` placeholders
+   - Store actual `.env` files with `op://` references (gitignored)
+
+2. **Desktop App Integration:**
+   - Use desktop app for authentication (more secure than auto-signin)
+   - Enables biometric unlock
+   - Syncs across all your devices
+
+3. **Shell Plugin for CLI Tools:**
+   - Preferred over manual `op read` for standard tools
+   - Zero code changes required
+   - Automatically works with git, aws, gh, etc.
+
+4. **Per-Directory .envrc:**
+   - Initialize 1Password at root project directory
+   - Child directories inherit automatically
+   - Minimal global scope exposure
+
+5. **Audit Secret Access:**
+   ```bash
+   # View recent secret access
+   op item list --recent
+
+   # Check which tools accessed secrets
+   op activity list
+   ```
+
+### Security Considerations
+
+**Session Management:**
+- Desktop app integration: Sessions managed by desktop app
+- Standalone: 30-minute timeout (configurable)
+- Biometric unlock required after timeout
+
+**Credential Storage:**
+- **macOS**: Credentials in macOS Keychain
+- **Windows**: Encrypted with Windows DPAPI
+- **Linux/WSL**: Encrypted with device-specific keys
+
+**Network:**
+- Syncs encrypted vault from 1Password servers
+- Local cache encrypted at rest
+- No plaintext secrets on disk
+
+**Access Control:**
+- Device authorization required
+- Multi-factor authentication supported
+- Audit logs for secret access
+
+### Additional Resources
+
+- [1Password CLI Documentation](https://developer.1password.com/docs/cli/)
+- [Shell Plugins Guide](https://developer.1password.com/docs/cli/shell-plugins/)
+- [Supported Tools List](https://developer.1password.com/docs/cli/shell-plugins/supported-tools/)
+- [Security Model](https://1password.com/security/)
 
 ---
 

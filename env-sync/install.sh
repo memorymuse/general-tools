@@ -128,6 +128,34 @@ SECRET_CREATE_TEMPLATES=true
 # Example: YOUR_API_KEY_HERE, YOUR_AWS_ACCESS_KEY_ID_HERE
 # To find unconverted placeholders: cc-isolate secrets check
 
+# ============================================================================
+# 1Password CLI Integration
+# ============================================================================
+
+# Enable 1Password CLI integration (requires 'op' command and desktop app)
+# When enabled, the shell plugin provides seamless secret injection
+# Documentation: https://developer.1password.com/docs/cli/shell-plugins
+CC_ISOLATE_1PASSWORD_ENABLED=true
+
+# Auto-signin when session expires (requires biometric authentication)
+# RECOMMENDED: false (let 1Password desktop app handle authentication)
+CC_ISOLATE_1PASSWORD_AUTO_SIGNIN=false
+
+# Default 1Password account (optional)
+# Leave empty to use default account, or set to your account subdomain
+# Example: "my-team.1password.com"
+CC_ISOLATE_1PASSWORD_ACCOUNT=""
+
+# ============================================================================
+# UI Configuration
+# ============================================================================
+
+# Enable custom bash prompt with git branch display
+CC_ISOLATE_PROMPT_ENABLED=true
+
+# Show welcome message when shell starts
+CC_ISOLATE_SHOW_WELCOME=false
+
 # Additional configuration can be added here
 EOF
     log_success "Configuration file created: $SCRIPT_DIR/config.sh"
