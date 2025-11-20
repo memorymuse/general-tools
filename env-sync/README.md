@@ -1,6 +1,6 @@
 # cc-isolate 🛡️
 
-**Claude Code Isolation System** - Portable, cross-platform environment isolation for Claude Code with intelligent bashrc layering and dotfile synchronization.
+**Claude Code Isolation System** - Portable, cross-platform environment isolation for Claude Code with intelligent bashrc layering, dotfile synchronization, and integrated secret scanning.
 
 ---
 
@@ -27,10 +27,14 @@ cc-isolate status
 # Sync dotfiles locally (create symlinks)
 cc-isolate dotfiles sync
 
-# Git sync - Push/Pull to GitHub
+# Git sync - Push/Pull to GitHub (with secret scanning!)
 cc-isolate dotfiles push      # Push dotfiles to GitHub
 cc-isolate sync pull          # Pull everything from GitHub
 cc-isolate sync status        # Check what needs to be pushed
+
+# Secret scanning
+cc-isolate secrets scan       # Scan for secrets
+cc-isolate secrets template   # Create template from file with secrets
 ```
 
 ### Activate in Current Shell
@@ -94,6 +98,7 @@ cc-isolate mount web-dev
   - [Git Synchronization](#git-synchronization)
   - [Configuration](#configuration)
 - [Cross-Platform Support](#cross-platform-support)
+- [Secret Scanning & Protection](#secret-scanning--protection)
 - [Security & Isolation](#security--isolation)
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
@@ -150,6 +155,15 @@ cc-isolate solves all of these problems elegantly.
 - **Symlink management**: Automatic symlinking between repo and home directory
 - **Conflict detection**: Warns about conflicts between repo and local files
 - **GitHub-based sync**: Commit and push changes to sync across machines
+
+### 🔐 Secret Scanning & Protection
+
+- **Automatic scanning**: Pre-push secret detection using GitLeaks (160+ patterns)
+- **100% local**: No API calls, no cloud services, all scanning happens on your machine
+- **Template generation**: Auto-creates template files with `YOUR_*_HERE` placeholders
+- **Blocked file types**: Prevents accidental commit of `.pem`, `.key`, `.env`, SSH keys, etc.
+- **Whitelist support**: Manage false positives easily
+- **Configurable**: Enable/disable, auto-install GitLeaks, auto-generate templates
 
 ### 🌍 Cross-Platform Support
 
@@ -649,6 +663,241 @@ Platform: WSL (Windows Subsystem for Linux)
 - On macOS, the system "bashrc" may be `~/.bash_profile`
 - `chflags uchg` provides file protection
 - Works with both Intel and Apple Silicon Macs
+
+---
+
+## Secret Scanning & Protection
+
+cc-isolate includes **integrated secret scanning** to prevent accidental leakage of sensitive information to GitHub. This is critical when syncing dotfiles that may contain API keys, tokens, or credentials.
+
+### How It Works
+
+**Automatic Scanning**: Every push command (`dotfiles push` and `sync push`) automatically scans files for secrets **before** committing.
+
+**GitLeaks Integration**: Uses [GitLeaks](https://github.com/gitleaks/gitleaks), the industry-standard open-source secret scanner with 160+ built-in secret patterns.
+
+**Template Generation**: When secrets are detected, cc-isolate can automatically create template files with secrets replaced by placeholders.
+
+**Local-Only**: All scanning happens **100% locally** - no API calls, no cloud services, no data leaves your machine.
+
+### Installation
+
+Install GitLeaks for secret scanning to work:
+
+```bash
+# macOS
+brew install gitleaks
+
+# Go
+go install github.com/gitleaks/gitleaks/v8@latest
+
+# Or download binary from:
+# https://github.com/gitleaks/gitleaks/releases
+```
+
+cc-isolate can auto-install via Homebrew or Go if `SECRET_SCAN_AUTO_INSTALL=true`.
+
+### Template Placeholders
+
+Secrets are replaced with the pattern: `YOUR_<SECRET_NAME>_HERE`
+
+**Examples:**
+- `YOUR_API_KEY_HERE`
+- `YOUR_AWS_ACCESS_KEY_ID_HERE`
+- `YOUR_DATABASE_PASSWORD_HERE`
+- `YOUR_GITHUB_TOKEN_HERE`
+
+This pattern makes it easy to:
+1. Identify template files that need values filled in
+2. Scan for unconverted placeholders: `cc-isolate secrets check`
+3. Search across systems: `grep -r "YOUR_.*_HERE"`
+
+### Usage Examples
+
+#### Scan Before Push
+
+```bash
+# Scan specific directory
+cc-isolate secrets scan dotfiles
+
+# Scan specific file
+cc-isolate secrets scan dotfiles/.gitconfig
+```
+
+#### Auto-Scan During Push
+
+```bash
+# This automatically scans before pushing
+cc-isolate dotfiles push "Update config"
+
+# If secrets found:
+# ✗ dotfiles/.gitconfig (secrets detected)
+#
+# Options:
+#   1. Remove secrets from files
+#   2. Use template files (*.template)
+#   3. Whitelist false positives
+#   4. Skip scan (DANGEROUS)
+#
+# ✗ Push blocked due to detected secrets
+```
+
+#### Template Generation
+
+When secrets are detected, templates are auto-created:
+
+```bash
+# Original file: dotfiles/.gitconfig
+[github]
+    token = ghp_abc123xyz789...
+
+# Auto-generated: dotfiles/.gitconfig.template
+[github]
+    token = YOUR_GITHUB_TOKEN_HERE
+```
+
+**Workflow:**
+1. Add original to `.gitignore`
+2. Commit template instead
+3. On new machine, copy template and fill in values
+
+Manual template creation:
+
+```bash
+cc-isolate secrets template dotfiles/.npmrc
+# Creates dotfiles/.npmrc.template
+```
+
+#### Whitelist False Positives
+
+Sometimes legitimate values trigger detection:
+
+```bash
+# Whitelist a file
+cc-isolate secrets whitelist dotfiles/.gitconfig
+
+# View whitelist
+cc-isolate secrets whitelist
+```
+
+#### Check for Unconverted Placeholders
+
+Ensure you've replaced all `YOUR_*_HERE` values:
+
+```bash
+cc-isolate secrets check dotfiles
+
+# Or check everything
+cc-isolate secrets check .
+```
+
+### What Gets Detected
+
+**Built-in patterns (160+):**
+- AWS keys and secrets
+- GitHub tokens (classic, PAT, OAuth)
+- Private keys (RSA, SSH, PGP)
+- Database connection strings
+- API keys (Slack, Stripe, etc.)
+- JWT tokens
+- Docker registry auth
+- NPM tokens
+- Shell exports with secrets
+
+**Blocked file types:**
+- `.pem`, `.key`, `.p12`, `.pfx` (certificates)
+- `.env*` files (environment variables)
+- `id_rsa`, `id_dsa`, `id_ecdsa` (SSH keys)
+- `credentials`, `credentials.json` (cloud credentials)
+
+See `.gitleaks.toml` for full configuration.
+
+### Configuration
+
+In `config.sh`:
+
+```bash
+# Enable secret scanning (RECOMMENDED)
+SECRET_SCAN_ENABLED=true
+
+# Block push when secrets detected (RECOMMENDED)
+SECRET_BLOCK_PUSH=true
+
+# Auto-create templates
+SECRET_CREATE_TEMPLATES=true
+
+# Auto-install gitleaks if missing
+SECRET_SCAN_AUTO_INSTALL=true
+```
+
+### Bypass Scanning (Use Carefully!)
+
+```bash
+# Skip scan for this push (DANGEROUS)
+cc-isolate dotfiles push --no-scan "message"
+cc-isolate sync push --no-scan "message"
+```
+
+⚠️ **Warning**: Only use `--no-scan` if you're absolutely certain the files are safe.
+
+### Best Practices
+
+1. **Whitelist-Only Dotfiles**: Only sync files that never contain secrets:
+   ```bash
+   DOTFILES_TO_SYNC=".bash_aliases .inputrc .editorconfig"
+   ```
+
+2. **Use Templates**: For configs that need secrets, use template files:
+   ```bash
+   # Commit: .gitconfig.template (with placeholders)
+   # Keep local: .gitconfig (with real values)
+   # .gitignore: .gitconfig
+   ```
+
+3. **Environment Variables**: Store secrets in `.env.local` (gitignored):
+   ```bash
+   # profiles/global/bashrc
+   if [[ -f "$HOME/.env.local" ]]; then
+       source "$HOME/.env.local"
+   fi
+   ```
+
+4. **Cloud Secret Managers**: For sensitive production use:
+   - [1Password CLI](https://developer.1password.com/docs/cli/)
+   - [Bitwarden CLI](https://bitwarden.com/help/cli/)
+   - [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/)
+   - [HashiCorp Vault](https://www.vaultproject.io/)
+
+5. **Regular Scans**: Periodically scan everything:
+   ```bash
+   cc-isolate secrets scan .
+   ```
+
+### Troubleshooting
+
+**"GitLeaks not found"**
+```bash
+# Install via Homebrew
+brew install gitleaks
+
+# Or disable scanning
+SECRET_SCAN_ENABLED=false  # in config.sh
+```
+
+**False positives**
+```bash
+# Whitelist the file
+cc-isolate secrets whitelist path/to/file
+```
+
+**Push blocked unexpectedly**
+```bash
+# See what was detected
+cc-isolate secrets scan dotfiles
+
+# If false positive, whitelist
+# If real secret, remove or use template
+```
 
 ---
 

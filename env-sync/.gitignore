@@ -2,6 +2,11 @@
 .state
 .cc-env
 system-backup/
+.cc-secrets-whitelist
+
+# Test artifacts
+.cc-test-*
+tests/fixtures/*.test
 
 # OS Files
 .DS_Store
@@ -29,6 +34,25 @@ Thumbs.db
 *.bak
 *.backup
 
-# Don't ignore example files
+# Secret files (never commit these!)
+*.env
+*.env.local
+*.env.production
+*.env.development
+.aws/credentials
+.npmrc
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Don't ignore example/template files
 !dotfiles/.gitconfig.example
 !dotfiles/*.example
+!dotfiles/*.template
+!**/*.template
+!**/*.example

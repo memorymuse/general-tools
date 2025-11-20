@@ -103,7 +103,30 @@ PROTECT_SYSTEM_BASHRC=true
 DOTFILE_SYNC_MODE="list"
 
 # List of dotfiles to sync (only used when DOTFILE_SYNC_MODE="list")
-DOTFILES_TO_SYNC=".gitconfig .vimrc .tmux.conf"
+# WARNING: Only sync safe dotfiles! Never sync files containing secrets
+DOTFILES_TO_SYNC=".bash_aliases .inputrc .editorconfig"
+
+# ============================================================================
+# Secret Scanning Configuration
+# ============================================================================
+
+# Enable secret scanning before push (RECOMMENDED: true)
+SECRET_SCAN_ENABLED=true
+
+# Automatically install gitleaks if not found (requires brew or go)
+SECRET_SCAN_AUTO_INSTALL=true
+
+# Block push when secrets are detected (RECOMMENDED: true)
+SECRET_BLOCK_PUSH=true
+
+# Automatically create template files when secrets are detected
+# Templates replace secrets with YOUR_*_HERE placeholders
+SECRET_CREATE_TEMPLATES=true
+
+# Template placeholder pattern (for easy scanning)
+# Secrets are replaced with: YOUR_<SECRET_NAME>_HERE
+# Example: YOUR_API_KEY_HERE, YOUR_AWS_ACCESS_KEY_ID_HERE
+# To find unconverted placeholders: cc-isolate secrets check
 
 # Additional configuration can be added here
 EOF
