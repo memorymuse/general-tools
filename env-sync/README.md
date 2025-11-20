@@ -1,6 +1,6 @@
 # cc-isolate 🛡️
 
-**Claude Code Isolation System** - Portable, cross-platform environment isolation for Claude Code with intelligent bashrc layering, dotfile synchronization, and integrated secret scanning.
+**Claude Code Isolation System** - Portable, cross-platform environment isolation for Claude Code with intelligent bashrc layering, dotfile synchronization, integrated secret scanning, and 1Password CLI integration for secure secret management.
 
 ---
 
@@ -46,6 +46,20 @@ source /path/to/env-sync/.cc-env
 export BASH_ENV=/path/to/env-sync/.cc-env
 ```
 
+### 1Password Setup (Recommended)
+```bash
+# 1. Install 1Password desktop app from 1password.com/downloads
+# 2. Install CLI
+brew install --cask 1password-cli  # macOS
+# (See 1Password Integration section for Linux/WSL)
+
+# 3. Enable CLI integration in 1Password desktop app:
+#    Settings → Developer → Enable "Integrate with 1Password CLI"
+
+# 4. Verify
+op --version
+```
+
 ### Common Workflows
 
 **First-time setup:**
@@ -53,6 +67,9 @@ export BASH_ENV=/path/to/env-sync/.cc-env
 cd env-sync && ./install.sh
 cc-isolate mount
 export BASH_ENV=$PWD/.cc-env
+
+# Optional: Install 1Password CLI for secret management
+# (See 1Password Setup above)
 ```
 
 **Sync environment to new machine:**
@@ -62,6 +79,9 @@ cd general-tools/env-sync
 ./install.sh
 cc-isolate sync pull         # Pull and sync everything
 cc-isolate mount
+
+# Install 1Password CLI if using secrets
+# (See 1Password Setup above)
 ```
 
 **Push changes to GitHub:**
@@ -166,6 +186,16 @@ cc-isolate solves all of these problems elegantly.
 - **Whitelist support**: Manage false positives easily
 - **Configurable**: Enable/disable, auto-install GitLeaks, auto-generate templates
 
+### 🔑 1Password CLI Integration
+
+- **Shell plugin support**: Automatic secret injection for git, aws, gh, and 60+ tools
+- **Biometric authentication**: Touch ID / Windows Hello integration via desktop app
+- **Zero code changes**: Works transparently with existing tools and workflows
+- **Template compatibility**: Templates define structure (git-synced), 1Password stores secrets
+- **.envrc compatible**: Works seamlessly with per-directory environment files
+- **Claude Code ready**: Automatically initialized in all CC bash sessions
+- **Cross-platform**: macOS, Linux, and WSL support
+
 ### 🌍 Cross-Platform Support
 
 - **Linux**: Full support (native and WSL)
@@ -193,19 +223,21 @@ env-sync/
 ├── bin/
 │   └── cc-isolate              # Main command-line tool
 ├── lib/
-│   └── platform.sh             # Cross-platform compatibility layer
+│   ├── platform.sh             # Cross-platform compatibility layer
+│   └── secrets.sh              # Secret scanning library (GitLeaks integration)
 ├── profiles/
 │   ├── global/
-│   │   ├── bashrc              # Global CC bashrc (overrides system)
-│   │   └── README.md
+│   │   └── bashrc              # Global CC bashrc with 1Password integration
 │   └── projects/
 │       └── example/
 │           └── bashrc          # Example project-specific bashrc
 ├── dotfiles/
 │   ├── .gitconfig.example      # Example dotfiles for reference
 │   └── ...                     # Your synced dotfiles go here
-├── bashrc.d/
-│   └── *.sh                    # Additional bash snippets (optional)
+├── tests/
+│   ├── test-secrets.sh         # Secret scanning test suite
+│   └── cleanup.sh              # Test cleanup
+├── .gitleaks.toml              # GitLeaks configuration
 ├── system-backup/
 │   └── bashrc.backup           # Backup of system bashrc
 ├── .cc-env                     # Generated environment file (when mounted)
