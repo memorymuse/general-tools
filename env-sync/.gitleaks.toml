@@ -1,0 +1,89 @@
+# GitLeaks Configuration for cc-isolate
+# This file configures secret detection patterns
+#
+# Documentation: https://github.com/gitleaks/gitleaks#configuration
+
+title = "cc-isolate GitLeaks Config"
+
+# Extend the default gitleaks config
+[extend]
+useDefault = true
+
+# Additional custom rules for common dotfile secrets
+[[rules]]
+id = "git-config-token"
+description = "Git Config OAuth Token"
+regex = '''(?i)helper\s*=.*oauth'''
+path = '''\.gitconfig$'''
+
+[[rules]]
+id = "git-url-credentials"
+description = "Git URL with Credentials"
+regex = '''url\s*=\s*https?://[^:]+:[^@]+@'''
+path = '''\.gitconfig$'''
+
+[[rules]]
+id = "npm-token"
+description = "NPM Access Token"
+regex = '''//registry\.npmjs\.org/:_authToken\s*=\s*[A-Za-z0-9-_]+'''
+path = '''\.npmrc$'''
+
+[[rules]]
+id = "shell-export-secret"
+description = "Shell Export with High-Entropy Value"
+regex = '''(?i)export\s+[A-Z_]+(TOKEN|KEY|SECRET|PASS|PWD|AUTH)\s*=\s*["']?[A-Za-z0-9+/=_-]{20,}["']?'''
+paths = ['''\.(bash|zsh)rc$''', '''\.(bash|zsh)_profile$''', '''\.profile$''']
+
+[[rules]]
+id = "database-url"
+description = "Database Connection String"
+regex = '''(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@'''
+
+[[rules]]
+id = "docker-config-auth"
+description = "Docker Config Auth"
+regex = '''"auth"\s*:\s*"[A-Za-z0-9+/=]+"'''
+path = '''\.docker/config\.json$'''
+
+[[rules]]
+id = "aws-credentials"
+description = "AWS Credentials File"
+regex = '''aws_secret_access_key\s*=\s*[A-Za-z0-9/+=]{40}'''
+path = '''\.aws/credentials$'''
+
+# Allow certain safe patterns (reduce false positives)
+[allowlist]
+description = "Allowlist for common false positives"
+
+# Allow example/template values
+regexes = [
+    '''(?i)YOUR_[A-Z_]+_HERE''',
+    '''(?i)REPLACE_ME''',
+    '''(?i)EXAMPLE_[A-Z_]+''',
+    '''(?i)<YOUR_[^>]+>''',
+    '''(?i)\$\{[A-Z_]+\}''',
+    '''(?i)xxxx+''',
+    '''(?i)0000+''',
+    '''(?i)1111+''',
+]
+
+# Allow common test/example values
+paths = [
+    '''\.example$''',
+    '''\.template$''',
+    '''\.sample$''',
+    '''/test/''',
+    '''/tests/''',
+    '''/fixtures/''',
+]
+
+# Stopwords to reduce false positives
+stopwords = [
+    "example",
+    "sample",
+    "test",
+    "demo",
+    "placeholder",
+    "changeme",
+    "replaceme",
+]

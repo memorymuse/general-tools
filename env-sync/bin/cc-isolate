@@ -13,8 +13,9 @@ VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_SYNC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Import platform detection library
+# Import libraries
 source "$ENV_SYNC_ROOT/lib/platform.sh"
+source "$ENV_SYNC_ROOT/lib/secrets.sh"
 
 # Configuration
 CONFIG_FILE="${CC_ISOLATE_CONFIG:-$ENV_SYNC_ROOT/config.sh}"
@@ -45,6 +46,21 @@ CC_BASHRC="${CC_BASHRC:-$ENV_SYNC_ROOT/profiles/global/bashrc}"
 PROTECT_SYSTEM_BASHRC="${PROTECT_SYSTEM_BASHRC:-true}"
 DOTFILE_SYNC_MODE="${DOTFILE_SYNC_MODE:-list}"
 DOTFILES_TO_SYNC="${DOTFILES_TO_SYNC:-.gitconfig .vimrc .tmux.conf}"
+
+# Secret scanning configuration
+SECRET_SCAN_ENABLED="${SECRET_SCAN_ENABLED:-true}"
+SECRET_SCAN_AUTO_INSTALL="${SECRET_SCAN_AUTO_INSTALL:-true}"
+SECRET_BLOCK_PUSH="${SECRET_BLOCK_PUSH:-true}"
+SECRET_CREATE_TEMPLATES="${SECRET_CREATE_TEMPLATES:-true}"
+
+# 1Password CLI configuration
+CC_ISOLATE_1PASSWORD_ENABLED="${CC_ISOLATE_1PASSWORD_ENABLED:-true}"
+CC_ISOLATE_1PASSWORD_AUTO_SIGNIN="${CC_ISOLATE_1PASSWORD_AUTO_SIGNIN:-false}"
+CC_ISOLATE_1PASSWORD_ACCOUNT="${CC_ISOLATE_1PASSWORD_ACCOUNT:-}"
+
+# UI configuration
+CC_ISOLATE_PROMPT_ENABLED="${CC_ISOLATE_PROMPT_ENABLED:-true}"
+CC_ISOLATE_SHOW_WELCOME="${CC_ISOLATE_SHOW_WELCOME:-false}"
 
 #------------------------------------------------------------------------------
 # Helper Functions
@@ -570,6 +586,11 @@ ${BOLD}COMMANDS:${RESET}
   ${CYAN}sync pull${RESET}             Pull all changes from GitHub
   ${CYAN}sync status${RESET}           Show git repository status
 
+  ${CYAN}secrets scan [path]${RESET}   Scan for secrets in files
+  ${CYAN}secrets whitelist [file]${RESET} Manage secret scan whitelist
+  ${CYAN}secrets template <file>${RESET} Create template from file with secrets
+  ${CYAN}secrets check [path]${RESET}  Check for unconverted placeholders
+
   ${CYAN}config${RESET}                Show current configuration
   ${CYAN}help${RESET}                  Show this help message
   ${CYAN}version${RESET}               Show version
@@ -595,6 +616,12 @@ ${BOLD}EXAMPLES:${RESET}
 
   # Check what needs to be pushed
   cc-isolate sync status
+
+  # Scan for secrets before pushing
+  cc-isolate secrets scan dotfiles
+
+  # Create template from file with secrets
+  cc-isolate secrets template dotfiles/.gitconfig
 
   # Create a new profile
   cc-isolate profile create web-dev
@@ -682,6 +709,15 @@ cmd_dotfiles_push() {
     check_git_repo
 
     local message="${1:-Update dotfiles}"
+    local skip_scan=false
+
+    # Check for --no-scan flag
+    if [[ "${1:-}" == "--no-scan" ]]; then
+        skip_scan=true
+        message="${2:-Update dotfiles}"
+    elif [[ "${2:-}" == "--no-scan" ]]; then
+        skip_scan=true
+    fi
 
     log_info "Pushing dotfiles to remote repository"
     echo
@@ -699,6 +735,64 @@ cmd_dotfiles_push() {
     log_info "Changes detected:"
     echo "$changes" | sed 's/^/  /'
     echo
+
+    # Secret scanning
+    if [[ "$SECRET_SCAN_ENABLED" == "true" ]] && [[ "$skip_scan" == "false" ]]; then
+        log_info "Scanning for secrets..."
+        echo
+
+        local scan_failed=false
+        local secrets_found=0
+
+        # Scan each changed file in dotfiles/
+        while IFS= read -r line; do
+            local file="${line:3}"  # Remove git status prefix
+
+            # Only scan files in dotfiles/
+            if [[ "$file" == dotfiles/* ]]; then
+                echo -n "  "
+                if scan_file "$file"; then
+                    echo -e "${GREEN}✓${RESET} $file"
+                else
+                    echo -e "${RED}✗${RESET} $file ${YELLOW}(secrets detected)${RESET}"
+                    ((secrets_found++))
+                    scan_failed=true
+
+                    # Offer to create template
+                    if [[ "$SECRET_CREATE_TEMPLATES" == "true" ]]; then
+                        echo
+                        log_info "Creating template file..."
+                        create_template_file "$file"
+                        echo
+                    fi
+                fi
+            fi
+        done <<< "$changes"
+
+        echo
+
+        if [[ "$scan_failed" == "true" ]]; then
+            log_error "${BOLD}Secret scan failed!${RESET}"
+            log_error "Found secrets in $secrets_found file(s)"
+            echo
+            log_info "Options:"
+            echo -e "  ${CYAN}1.${RESET} Remove secrets from files"
+            echo -e "  ${CYAN}2.${RESET} Use template files (*.template) and add originals to .gitignore"
+            echo -e "  ${CYAN}3.${RESET} Whitelist false positives: ${CYAN}cc-isolate secrets whitelist <file>${RESET}"
+            echo -e "  ${CYAN}4.${RESET} Skip scan (DANGEROUS): ${CYAN}cc-isolate dotfiles push --no-scan \"message\"${RESET}"
+            echo
+
+            if [[ "$SECRET_BLOCK_PUSH" == "true" ]]; then
+                log_error "Push blocked due to detected secrets"
+                return 1
+            else
+                log_warn "Secrets detected but blocking is disabled"
+            fi
+        else
+            log_success "Secret scan passed"
+            echo
+        fi
+    fi
 
     # Add dotfiles
     log_info "Staging dotfiles..."
@@ -770,6 +864,15 @@ cmd_sync_push() {
     check_git_repo
 
     local message="${1:-Update cc-isolate environment}"
+    local skip_scan=false
+
+    # Check for --no-scan flag
+    if [[ "${1:-}" == "--no-scan" ]]; then
+        skip_scan=true
+        message="${2:-Update cc-isolate environment}"
+    elif [[ "${2:-}" == "--no-scan" ]]; then
+        skip_scan=true
+    fi
 
     log_info "Pushing environment to remote repository"
     echo
@@ -787,6 +890,64 @@ cmd_sync_push() {
     log_info "Changes detected:"
     echo "$changes" | sed 's/^/  /'
     echo
+
+    # Secret scanning
+    if [[ "$SECRET_SCAN_ENABLED" == "true" ]] && [[ "$skip_scan" == "false" ]]; then
+        log_info "Scanning for secrets..."
+        echo
+
+        local scan_failed=false
+        local secrets_found=0
+
+        # Scan each changed file
+        while IFS= read -r line; do
+            local file="${line:3}"  # Remove git status prefix
+
+            # Scan relevant files
+            if [[ "$file" == dotfiles/* ]] || [[ "$file" == profiles/* ]] || [[ "$file" == bashrc.d/* ]] || [[ "$file" == config.sh ]]; then
+                echo -n "  "
+                if scan_file "$file"; then
+                    echo -e "${GREEN}✓${RESET} $file"
+                else
+                    echo -e "${RED}✗${RESET} $file ${YELLOW}(secrets detected)${RESET}"
+                    ((secrets_found++))
+                    scan_failed=true
+
+                    # Offer to create template
+                    if [[ "$SECRET_CREATE_TEMPLATES" == "true" ]]; then
+                        echo
+                        log_info "Creating template file..."
+                        create_template_file "$file"
+                        echo
+                    fi
+                fi
+            fi
+        done <<< "$changes"
+
+        echo
+
+        if [[ "$scan_failed" == "true" ]]; then
+            log_error "${BOLD}Secret scan failed!${RESET}"
+            log_error "Found secrets in $secrets_found file(s)"
+            echo
+            log_info "Options:"
+            echo -e "  ${CYAN}1.${RESET} Remove secrets from files"
+            echo -e "  ${CYAN}2.${RESET} Use template files (*.template) and add originals to .gitignore"
+            echo -e "  ${CYAN}3.${RESET} Whitelist false positives: ${CYAN}cc-isolate secrets whitelist <file>${RESET}"
+            echo -e "  ${CYAN}4.${RESET} Skip scan (DANGEROUS): ${CYAN}cc-isolate sync push --no-scan \"message\"${RESET}"
+            echo
+
+            if [[ "$SECRET_BLOCK_PUSH" == "true" ]]; then
+                log_error "Push blocked due to detected secrets"
+                return 1
+            else
+                log_warn "Secrets detected but blocking is disabled"
+            fi
+        else
+            log_success "Secret scan passed"
+            echo
+        fi
+    fi
 
     # Add all relevant files
     log_info "Staging changes..."
@@ -942,6 +1103,105 @@ cmd_sync_status() {
 }
 
 #------------------------------------------------------------------------------
+# Secrets Management Commands
+#------------------------------------------------------------------------------
+
+cmd_secrets_scan() {
+    print_header
+
+    local target="${1:-.}"
+
+    log_info "Scanning for secrets in: $target"
+    echo
+
+    # Ensure gitleaks is available
+    if ! ensure_gitleaks; then
+        log_error "Cannot scan without gitleaks"
+        return 1
+    fi
+
+    cd "$ENV_SYNC_ROOT"
+
+    if [[ -d "$target" ]]; then
+        scan_directory "$target"
+    elif [[ -f "$target" ]]; then
+        if scan_file "$target"; then
+            log_success "No secrets found in: $target"
+        else
+            log_error "Secrets found in: $target"
+            return 1
+        fi
+    else
+        die "Invalid target: $target"
+    fi
+}
+
+cmd_secrets_whitelist() {
+    local file="$1"
+
+    if [[ -z "$file" ]]; then
+        print_header
+        echo -e "${BOLD}Whitelist Management:${RESET}"
+        echo
+
+        local whitelist_file="${ENV_SYNC_ROOT}/.cc-secrets-whitelist"
+
+        if [[ -f "$whitelist_file" ]]; then
+            echo -e "${BOLD}Whitelisted files:${RESET}"
+            echo
+            grep -v '^#' "$whitelist_file" | grep -v '^$' | sed 's/^/  /' || echo "  (none)"
+        else
+            log_info "No whitelist file found"
+            log_info "Add files with: ${CYAN}cc-isolate secrets whitelist <file>${RESET}"
+        fi
+        echo
+        return 0
+    fi
+
+    print_header
+    whitelist_file "$file"
+    echo
+}
+
+cmd_secrets_template() {
+    local file="$1"
+
+    if [[ -z "$file" ]]; then
+        die "Usage: cc-isolate secrets template <file>"
+    fi
+
+    print_header
+
+    if [[ ! -f "$file" ]]; then
+        die "File not found: $file"
+    fi
+
+    create_template_file "$file"
+    echo
+
+    log_info "Template created: ${file}.template"
+    log_info "Add original to .gitignore and commit template instead"
+    echo
+}
+
+cmd_secrets_check() {
+    local target="${1:-dotfiles}"
+
+    print_header
+    log_info "Checking for unconverted template placeholders..."
+    echo
+
+    cd "$ENV_SYNC_ROOT"
+
+    if ! scan_for_template_placeholders "$target"; then
+        log_warn "Found template placeholders that should be replaced"
+        return 1
+    fi
+
+    echo
+}
+
+#------------------------------------------------------------------------------
 # Main Entry Point
 #------------------------------------------------------------------------------
 
@@ -1013,6 +1273,27 @@ main() {
                     ;;
                 *)
                     die "Unknown sync command: $subcommand"
+                    ;;
+            esac
+            ;;
+        secrets)
+            local subcommand="${1:-scan}"
+            shift || true
+            case "$subcommand" in
+                scan)
+                    cmd_secrets_scan "$@"
+                    ;;
+                whitelist)
+                    cmd_secrets_whitelist "$@"
+                    ;;
+                template)
+                    cmd_secrets_template "$@"
+                    ;;
+                check)
+                    cmd_secrets_check "$@"
+                    ;;
+                *)
+                    die "Unknown secrets command: $subcommand"
                     ;;
             esac
             ;;

@@ -1104,3 +1104,61 @@
 [2025-11-19 11:38:04] Directories copied: 19
 [2025-11-19 11:38:04] Backup size: 142M
 [2025-11-19 11:38:04] Duration: 29s
+[2025-11-26 10:32:13] ========== Daily Backup Started ==========
+[2025-11-26 10:32:13] Backup directory: /mnt/g/muse-backup/2025-11/daily-20251126-103213
+[2025-11-26 10:32:13] Created backup directory
+[2025-11-26 10:32:13] Processing config: /home/kysonk/projects/general_tools/muse-backup/configs/muse-v0-daily.json (muse-v0)
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/muse/backend/muse.db
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/muse/backend/hub_api.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/muse/backend/main.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/muse/backend/simple_semantic.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/muse/backend/query_classifier.py
+[2025-11-26 10:32:13] WARNING: Source not found, skipping: /home/kysonk/projects/muse-v0/muse/backend/pagination_implemen.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/scripts/activity_manager.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/scripts/file_utils.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/scripts/generate_readable_memory.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/scripts/memory_manager.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/scripts/note
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/scripts/safe_write
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/scripts/session_manager.py
+[2025-11-26 10:32:13] Copied file: /home/kysonk/projects/muse-v0/scripts/stream_builder.py
+[2025-11-26 10:32:14] Copied file: /home/kysonk/projects/muse-v0/scripts/stream_manager.py
+[2025-11-26 10:32:14] Copied file: /home/kysonk/projects/muse-v0/CLAUDE.md
+[2025-11-26 10:32:14] Copied directory: /home/kysonk/projects/muse-v0/streams/infra/.claude
+[2025-11-26 10:32:14] Copied file: /home/kysonk/projects/muse-v0/streams/infra/CLAUDE.md
+[2025-11-26 10:32:14] Copied directory: /home/kysonk/projects/muse-v0/streams/muse-design-system-v0/.claude
+[2025-11-26 10:32:14] Copied file: /home/kysonk/projects/muse-v0/streams/muse-design-system-v0/CLAUDE.md
+[2025-11-26 10:32:14] Copied directory: /home/kysonk/projects/muse-v0/streams/search_infra/.claude
+[2025-11-26 10:32:14] Copied file: /home/kysonk/projects/muse-v0/streams/search_infra/CLAUDE.md
+[2025-11-26 10:32:14] Copied directory: /home/kysonk/projects/muse-v0/streams/data_mining/.claude
+[2025-11-26 10:32:14] Copied file: /home/kysonk/projects/muse-v0/streams/data_mining/CLAUDE.md
+[2025-11-26 10:32:14] Processing config: /home/kysonk/projects/general_tools/muse-backup/configs/muse-v1-daily.json (muse-v1)
+[2025-11-26 10:32:14] Copied file: /home/kysonk/projects/muse-v1/muse/backend/db/muse.db
+[2025-11-26 10:32:14] Copied file: /home/kysonk/projects/muse-v1/CLAUDE.md
+[2025-11-26 10:32:14] Copied directory: /home/kysonk/projects/muse-v1/.claude
+[2025-11-26 10:32:15] Copied directory: /home/kysonk/projects/muse-v1/core
+[2025-11-26 10:32:15] Copied directory: /home/kysonk/projects/muse-v1/domain
+[2025-11-26 10:32:15] Copied directory: /home/kysonk/projects/muse-v1/docs
+[2025-11-26 10:32:16] Copied directory: /home/kysonk/projects/muse-v1/platform_layer
+[2025-11-26 10:32:16] Copied directory: /home/kysonk/projects/muse-v1/tests
+[2025-11-26 10:32:17] Copied file: /home/kysonk/projects/muse-v1/muse-cli
+[2025-11-26 10:32:17] Copied file: /home/kysonk/projects/muse-v1/streams/system/CLAUDE.md
+[2025-11-26 10:32:17] Copied directory: /home/kysonk/projects/muse-v1/streams/system/.claude
+[2025-11-26 10:32:17] WARNING: Source not found, skipping: /home/kysonk/projects/muse-v1/streams/cc-optimizations/CLAUDE.md
+[2025-11-26 10:32:17] Copied directory: /home/kysonk/projects/muse-v1/streams/cc-optimizations/.claude
+[2025-11-26 10:32:17] Copied directory: /home/kysonk/projects/muse-v1/streams/cc-optimizations/docs
+[2025-11-26 10:32:17] Copied directory: /home/kysonk/projects/muse-v1/streams/cc-optimizations/agents
+[2025-11-26 10:32:18] Copied directory: /home/kysonk/projects/muse-v1/streams/cc-optimizations/claude-mds
+[2025-11-26 10:32:18] Copied directory: /home/kysonk/projects/muse-v1/streams/cc-optimizations/hooks
+[2025-11-26 10:32:18] Copied directory: /home/kysonk/projects/muse-v1/streams/cc-optimizations/mcps
+[2025-11-26 10:32:18] Copied directory: /home/kysonk/projects/muse-v1/streams/cc-optimizations/skills
+[2025-11-26 10:32:45] Copied directory: /home/kysonk/.claude
+[2025-11-26 10:32:45] Copied file: /home/kysonk/bin/muse
+[2025-11-26 10:32:45] Copied file: /home/kysonk/.local/bin/note
+[2025-11-26 10:32:45] Copied file: /home/kysonk/.local/bin/mcp
+[2025-11-26 10:32:45] Copied file: /home/kysonk/.local/bin/safe_write
+[2025-11-26 10:32:47] ========== Daily Backup Completed ==========
+[2025-11-26 10:32:47] Files copied: 27
+[2025-11-26 10:32:47] Directories copied: 19
+[2025-11-26 10:32:47] Backup size: 139M
+[2025-11-26 10:32:47] Duration: 32s

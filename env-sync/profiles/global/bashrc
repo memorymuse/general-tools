@@ -1,0 +1,317 @@
+# ============================================================================
+# CC-Isolate Global Bash Configuration
+# ============================================================================
+# This file is sourced for all bash sessions when cc-isolate is active.
+# It provides a consistent environment across all projects and machines.
+#
+# IMPORTANT: This file is synced via git. DO NOT store secrets here!
+# Use templates with YOUR_*_HERE placeholders for sensitive values.
+# ============================================================================
+
+# ============================================================================
+# Environment Detection
+# ============================================================================
+
+# Detect platform
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    export CC_ISOLATE_PLATFORM="linux"
+    # Check if running in WSL
+    if grep -qEi "(Microsoft|WSL)" /proc/version &>/dev/null; then
+        export CC_ISOLATE_PLATFORM="wsl"
+    fi
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    export CC_ISOLATE_PLATFORM="macos"
+fi
+
+# ============================================================================
+# Path Configuration
+# ============================================================================
+
+# Add common user bin directories
+[[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
+[[ -d "$HOME/bin" ]] && export PATH="$HOME/bin:$PATH"
+
+# Homebrew paths (macOS and Linux)
+if [[ "$CC_ISOLATE_PLATFORM" == "macos" ]]; then
+    # Apple Silicon
+    [[ -d "/opt/homebrew/bin" ]] && export PATH="/opt/homebrew/bin:$PATH"
+    # Intel
+    [[ -d "/usr/local/bin" ]] && export PATH="/usr/local/bin:$PATH"
+elif [[ "$CC_ISOLATE_PLATFORM" == "linux" ]]; then
+    [[ -d "/home/linuxbrew/.linuxbrew/bin" ]] && export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+fi
+
+# ============================================================================
+# 1Password CLI Integration
+# ============================================================================
+
+# Initialize 1Password shell plugin for seamless secret injection
+# Requires: 1Password CLI (op) and 1Password desktop app
+# Documentation: https://developer.1password.com/docs/cli/shell-plugins
+if command -v op >/dev/null 2>&1; then
+    # Check if 1Password integration is enabled (default: true)
+    if [[ "${CC_ISOLATE_1PASSWORD_ENABLED:-true}" == "true" ]]; then
+        # Initialize shell plugin (enables automatic secret injection)
+        eval "$(op plugin run -- --init bash)"
+
+        # Set account if specified in config
+        if [[ -n "${CC_ISOLATE_1PASSWORD_ACCOUNT:-}" ]]; then
+            export OP_ACCOUNT="$CC_ISOLATE_1PASSWORD_ACCOUNT"
+        fi
+
+        # Optional: Auto-signin if session expired (requires biometric)
+        if [[ "${CC_ISOLATE_1PASSWORD_AUTO_SIGNIN:-false}" == "true" ]]; then
+            if ! op account get >/dev/null 2>&1; then
+                echo "🔐 1Password session expired. Please authenticate..."
+                eval "$(op signin)"
+            fi
+        fi
+    fi
+fi
+
+# ============================================================================
+# Editor Configuration
+# ============================================================================
+
+# Prefer modern editors, fallback to classics
+if command -v code >/dev/null 2>&1; then
+    export EDITOR="code --wait"
+    export VISUAL="code --wait"
+elif command -v vim >/dev/null 2>&1; then
+    export EDITOR="vim"
+    export VISUAL="vim"
+else
+    export EDITOR="vi"
+    export VISUAL="vi"
+fi
+
+# ============================================================================
+# Shell Behavior
+# ============================================================================
+
+# History configuration
+export HISTSIZE=10000
+export HISTFILESIZE=20000
+export HISTCONTROL=ignoreboth:erasedups  # Ignore duplicates and spaces
+export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S  "  # Timestamp history entries
+shopt -s histappend  # Append to history, don't overwrite
+
+# Shell options
+shopt -s checkwinsize  # Update LINES and COLUMNS after each command
+shopt -s cdspell       # Autocorrect minor typos in cd
+shopt -s dirspell      # Autocorrect minor typos in directory completion
+shopt -s globstar 2>/dev/null  # Enable ** recursive globbing (bash 4+)
+
+# Make less more friendly for non-text files
+[[ -x /usr/bin/lesspipe ]] && eval "$(SHELL=/bin/sh lesspipe)"
+
+# ============================================================================
+# Prompt Configuration
+# ============================================================================
+
+# Color definitions
+if [[ -t 1 ]]; then  # Only set colors for interactive terminals
+    export COLOR_RESET='\[\033[0m\]'
+    export COLOR_RED='\[\033[0;31m\]'
+    export COLOR_GREEN='\[\033[0;32m\]'
+    export COLOR_YELLOW='\[\033[0;33m\]'
+    export COLOR_BLUE='\[\033[0;34m\]'
+    export COLOR_PURPLE='\[\033[0;35m\]'
+    export COLOR_CYAN='\[\033[0;36m\]'
+    export COLOR_WHITE='\[\033[0;37m\]'
+    export COLOR_BOLD='\[\033[1m\]'
+fi
+
+# Simple, informative prompt
+# Format: user@host:~/path (git-branch) $
+if [[ "${CC_ISOLATE_PROMPT_ENABLED:-true}" == "true" ]]; then
+    # Function to get git branch
+    __cc_git_branch() {
+        local branch
+        branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+        if [[ -n "$branch" ]]; then
+            echo " ${COLOR_PURPLE}(${branch})${COLOR_RESET}"
+        fi
+    }
+
+    # Set prompt
+    PS1="${COLOR_GREEN}\u@\h${COLOR_RESET}:${COLOR_BLUE}\w${COLOR_RESET}\$(__cc_git_branch)${COLOR_RESET}\$ "
+fi
+
+# ============================================================================
+# Aliases
+# ============================================================================
+
+# Enable color support
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS uses BSD ls
+    alias ls='ls -G'
+else
+    # Linux uses GNU ls
+    alias ls='ls --color=auto'
+fi
+
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+
+# Grep with color
+alias grep='grep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
+
+# Safety nets
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+
+# Git shortcuts
+alias gs='git status'
+alias ga='git add'
+alias gc='git commit'
+alias gp='git push'
+alias gl='git log --oneline --graph --decorate'
+alias gd='git diff'
+
+# Directory navigation
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# ============================================================================
+# Functions
+# ============================================================================
+
+# Create directory and cd into it
+mkcd() {
+    mkdir -p "$1" && cd "$1"
+}
+
+# Quick search in current directory
+search() {
+    grep -r "$1" .
+}
+
+# Show disk usage of current directory
+duh() {
+    du -h --max-depth=1 | sort -h
+}
+
+# Extract various archive formats
+extract() {
+    if [[ -f "$1" ]]; then
+        case "$1" in
+            *.tar.bz2)   tar xjf "$1"     ;;
+            *.tar.gz)    tar xzf "$1"     ;;
+            *.bz2)       bunzip2 "$1"     ;;
+            *.rar)       unrar e "$1"     ;;
+            *.gz)        gunzip "$1"      ;;
+            *.tar)       tar xf "$1"      ;;
+            *.tbz2)      tar xjf "$1"     ;;
+            *.tgz)       tar xzf "$1"     ;;
+            *.zip)       unzip "$1"       ;;
+            *.Z)         uncompress "$1"  ;;
+            *.7z)        7z x "$1"        ;;
+            *)           echo "'$1' cannot be extracted via extract()" ;;
+        esac
+    else
+        echo "'$1' is not a valid file"
+    fi
+}
+
+# ============================================================================
+# Platform-Specific Configuration
+# ============================================================================
+
+if [[ "$CC_ISOLATE_PLATFORM" == "wsl" ]]; then
+    # WSL-specific configuration
+
+    # Fix interop for Windows commands
+    export BROWSER="/mnt/c/Windows/explorer.exe"
+
+    # Function to open files in Windows
+    open() {
+        if [[ $# -eq 0 ]]; then
+            explorer.exe .
+        else
+            explorer.exe "$@"
+        fi
+    }
+
+elif [[ "$CC_ISOLATE_PLATFORM" == "macos" ]]; then
+    # macOS-specific configuration
+
+    # Use macOS open command (already available)
+    :
+fi
+
+# ============================================================================
+# Development Tools
+# ============================================================================
+
+# Node Version Manager (nvm)
+if [[ -d "$HOME/.nvm" ]]; then
+    export NVM_DIR="$HOME/.nvm"
+    [[ -s "$NVM_DIR/nvm.sh" ]] && \. "$NVM_DIR/nvm.sh"
+    [[ -s "$NVM_DIR/bash_completion" ]] && \. "$NVM_DIR/bash_completion"
+fi
+
+# Python virtual environment helpers
+if command -v python3 >/dev/null 2>&1; then
+    alias venv='python3 -m venv'
+    alias activate='source venv/bin/activate'
+fi
+
+# Rust/Cargo
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+
+# Go
+[[ -d "/usr/local/go/bin" ]] && export PATH="/usr/local/go/bin:$PATH"
+[[ -d "$HOME/go/bin" ]] && export PATH="$HOME/go/bin:$PATH"
+
+# ============================================================================
+# CC-Isolate Utilities
+# ============================================================================
+
+# Quick access to cc-isolate commands
+alias cc-status='cc-isolate status'
+alias cc-push='cc-isolate push'
+alias cc-pull='cc-isolate pull'
+alias cc-sync='cc-isolate sync'
+
+# Show current isolation status
+cc-info() {
+    echo "CC-Isolate Status:"
+    echo "  Platform: $CC_ISOLATE_PLATFORM"
+    echo "  Profile: ${CC_ISOLATE_PROFILE:-global}"
+    echo "  1Password: $(command -v op >/dev/null && echo 'installed' || echo 'not installed')"
+    if command -v op >/dev/null 2>&1; then
+        if op account get >/dev/null 2>&1; then
+            echo "  1Password Status: authenticated"
+        else
+            echo "  1Password Status: not authenticated"
+        fi
+    fi
+}
+
+# ============================================================================
+# Source Additional Configuration
+# ============================================================================
+
+# Source bash aliases if exists (for additional user customization)
+[[ -f ~/.bash_aliases ]] && source ~/.bash_aliases
+
+# Source project-specific configuration if exists
+# This is automatically sourced by cc-isolate when in a project directory
+if [[ -n "${CC_ISOLATE_PROJECT_PROFILE:-}" ]] && [[ -f "$CC_ISOLATE_PROJECT_PROFILE" ]]; then
+    source "$CC_ISOLATE_PROJECT_PROFILE"
+fi
+
+# ============================================================================
+# Welcome Message (Optional)
+# ============================================================================
+
+if [[ "${CC_ISOLATE_SHOW_WELCOME:-false}" == "true" ]] && [[ -t 1 ]]; then
+    echo "🔒 CC-Isolate environment active"
+    [[ -n "${CC_ISOLATE_PROFILE:-}" ]] && echo "   Profile: $CC_ISOLATE_PROFILE"
+fi

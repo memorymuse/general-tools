@@ -103,7 +103,58 @@ PROTECT_SYSTEM_BASHRC=true
 DOTFILE_SYNC_MODE="list"
 
 # List of dotfiles to sync (only used when DOTFILE_SYNC_MODE="list")
-DOTFILES_TO_SYNC=".gitconfig .vimrc .tmux.conf"
+# WARNING: Only sync safe dotfiles! Never sync files containing secrets
+DOTFILES_TO_SYNC=".bash_aliases .inputrc .editorconfig"
+
+# ============================================================================
+# Secret Scanning Configuration
+# ============================================================================
+
+# Enable secret scanning before push (RECOMMENDED: true)
+SECRET_SCAN_ENABLED=true
+
+# Automatically install gitleaks if not found (requires brew or go)
+SECRET_SCAN_AUTO_INSTALL=true
+
+# Block push when secrets are detected (RECOMMENDED: true)
+SECRET_BLOCK_PUSH=true
+
+# Automatically create template files when secrets are detected
+# Templates replace secrets with YOUR_*_HERE placeholders
+SECRET_CREATE_TEMPLATES=true
+
+# Template placeholder pattern (for easy scanning)
+# Secrets are replaced with: YOUR_<SECRET_NAME>_HERE
+# Example: YOUR_API_KEY_HERE, YOUR_AWS_ACCESS_KEY_ID_HERE
+# To find unconverted placeholders: cc-isolate secrets check
+
+# ============================================================================
+# 1Password CLI Integration
+# ============================================================================
+
+# Enable 1Password CLI integration (requires 'op' command and desktop app)
+# When enabled, the shell plugin provides seamless secret injection
+# Documentation: https://developer.1password.com/docs/cli/shell-plugins
+CC_ISOLATE_1PASSWORD_ENABLED=true
+
+# Auto-signin when session expires (requires biometric authentication)
+# RECOMMENDED: false (let 1Password desktop app handle authentication)
+CC_ISOLATE_1PASSWORD_AUTO_SIGNIN=false
+
+# Default 1Password account (optional)
+# Leave empty to use default account, or set to your account subdomain
+# Example: "my-team.1password.com"
+CC_ISOLATE_1PASSWORD_ACCOUNT=""
+
+# ============================================================================
+# UI Configuration
+# ============================================================================
+
+# Enable custom bash prompt with git branch display
+CC_ISOLATE_PROMPT_ENABLED=true
+
+# Show welcome message when shell starts
+CC_ISOLATE_SHOW_WELCOME=false
 
 # Additional configuration can be added here
 EOF
