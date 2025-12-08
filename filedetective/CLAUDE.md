@@ -67,8 +67,9 @@ filedet ~/.claude/CLAUDE.md "streams/*/CLAUDE.md"  # Combine with local files
 
 ### Find Command (Search Without Analyzing)
 ```bash
-filedet find storage.py                  # Find all matches
-filedet find "*.py"                      # Find all Python files
+filedet find storage.py                  # Find in configured project directories
+filedet find storage.py -l               # Find in current directory (local)
+filedet find "*.py" -l                   # Find all Python files locally
 filedet find docs/*ARCH*.md docs/*VISION*.md  # Multiple patterns at once
 ```
 
@@ -203,6 +204,11 @@ Configured in `config.yaml`:
 Uses tiktoken with `cl100k_base` encoding. Fallback: `words * 1.3` if tiktoken unavailable (82.6% accuracy).
 
 ## Flags
+
+### Global flags
+| Flag | Long | Description |
+|------|------|-------------|
+| `-l` | `--local` | Search current directory instead of configured project dirs |
 
 ### Analyze mode
 | Flag | Long | Description |

@@ -48,7 +48,8 @@ class FileFinder:
     def find_files(
         self,
         pattern: str,
-        content_search: Optional[str] = None
+        content_search: Optional[str] = None,
+        local_dir: Optional[Path] = None
     ) -> list[FileMatch]:
         """Find files matching pattern across priority directories.
 
@@ -64,11 +65,29 @@ class FileFinder:
                     Use wildcards (*) for flexible matching.
                     Include '/' for path-based matching.
             content_search: Optional text to search for in file contents
+            local_dir: If provided, search only this directory instead of configured dirs
 
         Returns:
             List of FileMatch objects, sorted by priority then date
         """
         matches = []
+
+        # If local_dir specified, search only that directory
+        if local_dir is not None:
+            local_path = Path(local_dir).expanduser().resolve()
+            if local_path.exists():
+                dir_matches = self._search_directory(
+                    local_path,
+                    pattern,
+                    priority=0,  # Local gets highest priority
+                    recursive=True,
+                    exclude=set(),
+                    content_search=content_search
+                )
+                matches.extend(dir_matches)
+            # Sort by date only (all same priority)
+            matches.sort(key=lambda m: -m.modified_date)
+            return matches
 
         for search_dir in self.search_dirs:
             dir_path = Path(search_dir["path"]).expanduser()
