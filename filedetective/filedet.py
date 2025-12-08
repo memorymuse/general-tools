@@ -51,7 +51,8 @@ Examples:
   filedet "*/memos/design/*.md"   # Across all subdirectories
 
   # Commands
-  filedet find storage.py         # Find all matches (no analysis)
+  filedet find storage.py         # Find in configured project directories
+  filedet find storage.py -l      # Find in current directory (local)
   filedet find docs/*.md docs/*.py # Multiple patterns at once
   filedet grep "TODO" .           # Search file contents
 
@@ -87,24 +88,32 @@ Examples:
         version=f"%(prog)s {VERSION}"
     )
 
+    parser.add_argument(
+        "-l", "--local",
+        action="store_true",
+        help="Search current directory instead of configured project directories"
+    )
+
     return parser
 
 
-def handle_find(patterns: list[str]) -> int:
+def handle_find(patterns: list[str], local: bool = False) -> int:
     """Handle find command.
 
     Args:
         patterns: One or more patterns to search for
+        local: If True, search current directory instead of configured dirs
 
     Returns:
         Exit code
     """
     finder = FileFinder()
+    local_dir = Path.cwd() if local else None
 
     # Collect all matches from all patterns
     all_matches = []
     for pattern in patterns:
-        matches = finder.find_files(pattern)
+        matches = finder.find_files(pattern, local_dir=local_dir)
         all_matches.extend(matches)
 
     # Remove duplicates (same file matched by multiple patterns)
@@ -263,19 +272,21 @@ def handle_hist(args: list[str]) -> int:
         return 1
 
 
-def handle_analyze(files: list[str], show_outline: bool, show_deps: bool) -> int:
+def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local: bool = False) -> int:
     """Handle file analysis.
 
     Args:
         files: List of file paths
         show_outline: Show structure
         show_deps: Show dependencies
+        local: If True, search current directory instead of configured dirs
 
     Returns:
         Exit code
     """
     analyzer = FileAnalyzer()
     finder = FileFinder()
+    local_dir = Path.cwd() if local else None
 
     # Resolve file paths
     resolved_files = []
@@ -297,7 +308,7 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool) -> int
                 # Wrap in wildcards for fuzzy matching
                 search_pattern = f"*{file_pattern}*"
 
-            matches = finder.find_files(search_pattern)
+            matches = finder.find_files(search_pattern, local_dir=local_dir)
 
             # Sort by recency (most recent first)
             matches.sort(key=lambda m: m.modified_date, reverse=True)
@@ -364,10 +375,10 @@ def main():
     if first_arg == "find":
         if len(args.files_or_command) < 2:
             display_error("find command requires at least one pattern")
-            print("Usage: filedet find <pattern> [<pattern2> ...]")
+            print("Usage: filedet find <pattern> [<pattern2> ...] [-l]")
             return 1
         patterns = args.files_or_command[1:]  # All args after "find"
-        return handle_find(patterns)
+        return handle_find(patterns, local=args.local)
 
     elif first_arg == "grep":
         if len(args.files_or_command) < 3:
@@ -387,7 +398,8 @@ def main():
         return handle_analyze(
             args.files_or_command,
             args.outline,
-            args.deps
+            args.deps,
+            local=args.local
         )
 
 
