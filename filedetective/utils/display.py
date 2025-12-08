@@ -1,5 +1,9 @@
 """Display formatting using Rich library."""
+from datetime import datetime
+from pathlib import Path
 from typing import List, Optional, Union
+from zoneinfo import ZoneInfo
+
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -180,3 +184,48 @@ def _display_core_stats(stats: FileStats) -> None:
 
     if rate_parts:
         console.print("  │  ".join(rate_parts))
+
+
+def display_history_table(entries: List, base_dir: Path) -> None:
+    """Display history results as a Rich table.
+
+    Args:
+        entries: List of HistoryEntry objects
+        base_dir: Base directory for context in header
+    """
+    from core.history import HistoryEntry  # Import here to avoid circular
+
+    # Create table
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Modified (PST)", style="dim", no_wrap=True, width=16)
+    table.add_column("Ext", style="yellow", no_wrap=True, width=8)
+    table.add_column("Path", style="cyan", no_wrap=False)
+    table.add_column("Lines", justify="right", style="blue", width=7)
+    table.add_column("Tokens", justify="right", style="magenta", width=8)
+
+    # PST timezone
+    pst = ZoneInfo("America/Los_Angeles")
+
+    for entry in entries:
+        # Convert timestamp to PST
+        dt = datetime.fromtimestamp(entry.modified_date, tz=pst)
+        date_str = dt.strftime("%y.%m.%d %H:%M")
+
+        # Truncate long paths
+        rel_path = entry.relative_path
+        if len(rel_path) > 50:
+            rel_path = "..." + rel_path[-47:]
+
+        table.add_row(
+            date_str,
+            entry.extension,
+            rel_path,
+            f"{entry.lines:,}",
+            f"{entry.tokens:,}",
+        )
+
+    # Display
+    display_path = str(base_dir).replace(str(Path.home()), "~")
+    console.print(f"\n[bold]Recent files in[/] [cyan]{display_path}[/] [dim]({len(entries)} shown)[/]\n")
+    console.print(table)
+    console.print()

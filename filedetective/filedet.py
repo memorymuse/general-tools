@@ -16,15 +16,17 @@ from pathlib import Path
 
 from core.file_finder import FileFinder
 from core.file_analyzer import FileAnalyzer
+from core.history import HistoryFinder
 from utils.display import (
     display_single_file,
     display_multiple_files,
     display_search_results,
+    display_history_table,
     display_error,
 )
 
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -52,6 +54,12 @@ Examples:
   filedet find storage.py         # Find all matches (no analysis)
   filedet find docs/*.md docs/*.py # Multiple patterns at once
   filedet grep "TODO" .           # Search file contents
+
+  # History (recent files)
+  filedet hist                    # 15 most recent files in cwd
+  filedet hist -n 30              # Adjust count
+  filedet hist -ft .md .py        # Filter by file type
+  filedet hist -h                 # Show hist command help
         """
     )
 
@@ -153,6 +161,108 @@ def handle_grep(term: str, directory: str) -> int:
         return 1
 
 
+HIST_HELP = """usage: filedet hist [directory] [-n COUNT] [-ft EXT [EXT ...]]
+
+Show recently modified files in a directory tree.
+
+positional arguments:
+  directory             Directory to search (default: current directory)
+
+optional arguments:
+  -h, --help            Show this help message and exit
+  -n, --count COUNT     Number of files to show (default: 15)
+  -ft, --filetypes EXT [EXT ...]
+                        Filter by file extension(s). Accepts: .md, md, *.env*, *local
+
+Examples:
+  filedet hist                      # 15 recent in current directory
+  filedet hist ~/projects -n 10     # 10 recent in specific directory
+  filedet hist -ft .md .py          # Only markdown and python files
+  filedet hist -ft .env* .*local    # Dotfiles matching patterns
+"""
+
+
+def handle_hist(args: list[str]) -> int:
+    """Handle hist command.
+
+    Args:
+        args: Arguments after 'hist' (e.g., ['-n', '30', '-ft', '.md'])
+
+    Returns:
+        Exit code
+    """
+    # Check for help flag
+    if '-h' in args or '--help' in args:
+        print(HIST_HELP)
+        return 0
+
+    # Parse arguments
+    directory = "."
+    count = 15
+    filetypes = None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+
+        if arg in ('-n', '--count'):
+            if i + 1 >= len(args):
+                display_error("-n requires a number")
+                return 1
+            try:
+                count = int(args[i + 1])
+            except ValueError:
+                display_error(f"-n requires a number, got: {args[i + 1]}")
+                return 1
+            i += 2
+
+        elif arg in ('-ft', '--filetypes'):
+            # Collect all following arguments until next flag or end
+            filetypes = []
+            i += 1
+            while i < len(args) and not args[i].startswith('-'):
+                filetypes.append(args[i])
+                i += 1
+            if not filetypes:
+                display_error("-ft requires at least one file type")
+                return 1
+
+        elif arg.startswith('-'):
+            display_error(f"Unknown flag: {arg}")
+            print("Use 'filedet hist -h' for help")
+            return 1
+
+        else:
+            # Positional argument = directory
+            directory = arg
+            i += 1
+
+    # Expand directory path
+    dir_path = Path(directory).expanduser().resolve()
+
+    if not dir_path.exists():
+        display_error(f"Directory not found: {directory}")
+        return 1
+
+    if not dir_path.is_dir():
+        display_error(f"Not a directory: {directory}")
+        return 1
+
+    # Find recent files
+    finder = HistoryFinder()
+    entries = finder.find_recent(dir_path, count=count, filetypes=filetypes)
+
+    if entries:
+        display_history_table(entries, dir_path)
+        return 0
+    else:
+        if filetypes:
+            print(f"\nNo files matching {filetypes} found in {directory}\n")
+        else:
+            print(f"\nNo files found in {directory}\n")
+        return 1
+
+
 def handle_analyze(files: list[str], show_outline: bool, show_deps: bool) -> int:
     """Handle file analysis.
 
@@ -241,6 +351,10 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool) -> int
 
 def main():
     """Main entry point."""
+    # Handle 'hist' command before argparse (so hist -h works)
+    if len(sys.argv) > 1 and sys.argv[1] == "hist":
+        return handle_hist(sys.argv[2:])
+
     parser = create_parser()
     args = parser.parse_args()
 
@@ -263,6 +377,10 @@ def main():
         term = args.files_or_command[1]
         directory = args.files_or_command[2]
         return handle_grep(term, directory)
+
+    elif first_arg == "hist":
+        # Pass remaining args to hist handler
+        return handle_hist(args.files_or_command[1:])
 
     else:
         # Analyze mode (default)
