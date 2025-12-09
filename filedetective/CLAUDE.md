@@ -90,6 +90,7 @@ filedet hist -ft .md .py          # Filter by extension (with or without dot)
 filedet hist -ft .env* .*local    # Wildcard patterns for dotfiles
 filedet hist -g                   # Show git status column (M/A/?/✓)
 filedet hist -gd                  # Show git status + last commit info
+filedet hist -full                # Simple output: datetime + full path
 filedet hist -h                   # Show hist-specific help
 ```
 
@@ -228,6 +229,7 @@ Uses tiktoken with `cl100k_base` encoding. Fallback: `words * 1.3` if tiktoken u
 | `-ft` | `--filetypes` | Filter by extension(s): `.md`, `md`, `*.env*`, `*local` |
 | `-g` | `--git` | Show git status column (M/A/?/✓) |
 | `-gd` | `--git-detail` | Show git status + last commit info |
+| `-full` | `--full` | Simple output: datetime + full path only (no table) |
 
 ## Troubleshooting
 

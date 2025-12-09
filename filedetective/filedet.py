@@ -22,6 +22,7 @@ from utils.display import (
     display_multiple_files,
     display_search_results,
     display_history_table,
+    display_history_full,
     display_error,
 )
 
@@ -172,7 +173,7 @@ def handle_grep(term: str, directory: str) -> int:
         return 1
 
 
-HIST_HELP = """usage: filedet hist [directory] [-n COUNT] [-ft EXT [EXT ...]] [-g] [-gd]
+HIST_HELP = """usage: filedet hist [directory] [-n COUNT] [-ft EXT [EXT ...]] [-g] [-gd] [-full]
 
 Show recently modified files in a directory tree.
 
@@ -186,6 +187,7 @@ optional arguments:
                         Filter by file extension(s). Accepts: .md, md, *.env*, *local
   -g, --git             Show git status column (M=modified, A=staged, ?=untracked, ✓=clean)
   -gd, --git-detail     Show git status + last commit info
+  -full, --full         Simple output: datetime + full path only (no table)
 
 Examples:
   filedet hist                      # 15 recent in current directory
@@ -194,6 +196,7 @@ Examples:
   filedet hist -ft .env* .*local    # Dotfiles matching patterns
   filedet hist -g                   # Include git status column
   filedet hist -gd                  # Include git status + last commit
+  filedet hist -full                # Simple datetime + full path output
 """
 
 
@@ -217,6 +220,7 @@ def handle_hist(args: list[str]) -> int:
     filetypes = None
     git_status = False
     git_detail = False
+    full_output = False
 
     i = 0
     while i < len(args):
@@ -252,6 +256,10 @@ def handle_hist(args: list[str]) -> int:
             git_detail = True
             i += 1
 
+        elif arg in ('-full', '--full'):
+            full_output = True
+            i += 1
+
         elif arg.startswith('-'):
             display_error(f"Unknown flag: {arg}")
             print("Use 'filedet hist -h' for help")
@@ -284,7 +292,10 @@ def handle_hist(args: list[str]) -> int:
     )
 
     if entries:
-        display_history_table(entries, dir_path, show_git=git_status or git_detail, show_git_detail=git_detail)
+        if full_output:
+            display_history_full(entries, dir_path)
+        else:
+            display_history_table(entries, dir_path, show_git=git_status or git_detail, show_git_detail=git_detail)
         return 0
     else:
         if filetypes:
