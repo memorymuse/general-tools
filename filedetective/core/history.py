@@ -17,6 +17,10 @@ class HistoryEntry:
     extension: str         # File extension (e.g., ".py")
     lines: int
     tokens: int
+    # Git info (optional)
+    git_status: Optional[str] = None           # M, A, ?, ✓, !, -
+    git_commit_relative: Optional[str] = None  # "2d", "5h"
+    git_commit_msg: Optional[str] = None       # Truncated commit message
 
 
 # Utility dotfiles to include (even though they start with .)
@@ -87,7 +91,9 @@ class HistoryFinder:
         self,
         directory: Path,
         count: int = 15,
-        filetypes: Optional[list[str]] = None
+        filetypes: Optional[list[str]] = None,
+        git_status: bool = False,
+        git_detail: bool = False
     ) -> list[HistoryEntry]:
         """Find most recently modified files.
 
@@ -95,6 +101,8 @@ class HistoryFinder:
             directory: Directory to search (recursive)
             count: Maximum number of results
             filetypes: Optional list of extensions to filter by (e.g., [".md", "py", "*.env*"])
+            git_status: If True, include git status column
+            git_detail: If True, include git status + last commit info
 
         Returns:
             List of HistoryEntry sorted by modified date descending
@@ -135,7 +143,34 @@ class HistoryFinder:
 
         # Sort by modified date descending and return top N
         entries.sort(key=lambda e: e.modified_date, reverse=True)
-        return entries[:count]
+        entries = entries[:count]
+
+        # Add git info if requested
+        if git_status or git_detail:
+            self._add_git_info(entries, directory, include_commit=git_detail)
+
+        return entries
+
+    def _add_git_info(self, entries: list[HistoryEntry], base_dir: Path, include_commit: bool = False) -> None:
+        """Add git information to entries.
+
+        Args:
+            entries: List of HistoryEntry to update in place
+            base_dir: Base directory for git root detection
+            include_commit: Whether to include commit details
+        """
+        from core.git_utils import get_git_root, get_file_status, get_file_last_commit
+
+        git_root = get_git_root(base_dir)
+
+        for entry in entries:
+            file_path = Path(entry.path)
+            entry.git_status = get_file_status(file_path, git_root)
+
+            if include_commit and git_root is not None:
+                _, msg, relative = get_file_last_commit(file_path, git_root)
+                entry.git_commit_relative = relative
+                entry.git_commit_msg = msg
 
     def _normalize_extension(self, ext: str) -> str:
         """Normalize extension input to glob pattern.
