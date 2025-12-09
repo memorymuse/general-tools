@@ -186,25 +186,43 @@ def _display_core_stats(stats: FileStats) -> None:
         console.print("  │  ".join(rate_parts))
 
 
-def display_history_table(entries: List, base_dir: Path) -> None:
+def display_history_table(entries: List, base_dir: Path, show_git: bool = False, show_git_detail: bool = False) -> None:
     """Display history results as a Rich table.
 
     Args:
         entries: List of HistoryEntry objects
         base_dir: Base directory for context in header
+        show_git: Whether to show git status column
+        show_git_detail: Whether to show git detail (last commit) column
     """
     from core.history import HistoryEntry  # Import here to avoid circular
 
     # Create table
-    table = Table(show_header=True, header_style="bold cyan")
-    table.add_column("Modified (PST)", style="dim", no_wrap=True, width=16)
-    table.add_column("Ext", style="yellow", no_wrap=True, width=8)
-    table.add_column("Path", style="cyan", no_wrap=False)
-    table.add_column("Lines", justify="right", style="blue", width=7)
-    table.add_column("Tokens", justify="right", style="magenta", width=8)
+    table = Table(show_header=True, header_style="bold cyan", expand=False)
+    table.add_column("Modified (PST)", style="dim", no_wrap=True, width=14)
+    table.add_column("Ext", style="yellow", no_wrap=True, width=6)
+    table.add_column("Path", style="cyan", no_wrap=True, overflow="ellipsis", max_width=35)
+    table.add_column("Lines", justify="right", style="blue", width=6)
+    table.add_column("Tokens", justify="right", style="magenta", width=7)
+
+    if show_git:
+        table.add_column("Git", justify="center", no_wrap=True, min_width=3)
+
+    if show_git_detail:
+        table.add_column("Last Commit", style="dim", no_wrap=True, overflow="ellipsis", max_width=25)
 
     # PST timezone
     pst = ZoneInfo("America/Los_Angeles")
+
+    # Git status color mapping
+    git_status_style = {
+        "M": "[red]M[/]",
+        "A": "[green]A[/]",
+        "?": "[yellow]?[/]",
+        "✓": "[dim]✓[/]",
+        "!": "[dim]![/]",
+        "-": "[dim]-[/]",
+    }
 
     for entry in entries:
         # Convert timestamp to PST
@@ -216,13 +234,30 @@ def display_history_table(entries: List, base_dir: Path) -> None:
         if len(rel_path) > 50:
             rel_path = "..." + rel_path[-47:]
 
-        table.add_row(
+        row = [
             date_str,
             entry.extension,
             rel_path,
             f"{entry.lines:,}",
             f"{entry.tokens:,}",
-        )
+        ]
+
+        if show_git:
+            status = entry.git_status or "-"
+            row.append(git_status_style.get(status, status))
+
+        if show_git_detail:
+            if entry.git_commit_relative and entry.git_commit_msg:
+                # Truncate message if needed
+                msg = entry.git_commit_msg
+                if len(msg) > 20:
+                    msg = msg[:17] + "..."
+                commit_info = f"{entry.git_commit_relative}: {msg}"
+            else:
+                commit_info = "--"
+            row.append(commit_info)
+
+        table.add_row(*row)
 
     # Display
     display_path = str(base_dir).replace(str(Path.home()), "~")

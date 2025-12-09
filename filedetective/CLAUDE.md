@@ -88,8 +88,12 @@ filedet hist -n 30                # Adjust count
 filedet hist ~/projects -n 10     # Specific directory
 filedet hist -ft .md .py          # Filter by extension (with or without dot)
 filedet hist -ft .env* .*local    # Wildcard patterns for dotfiles
+filedet hist -g                   # Show git status column (M/A/?/✓)
+filedet hist -gd                  # Show git status + last commit info
 filedet hist -h                   # Show hist-specific help
 ```
+
+**Git status values**: `M` = modified, `A` = staged, `?` = untracked, `✓` = clean, `!` = ignored, `-` = not in repo
 
 **Included dotfiles**: `.gitignore`, `.env*`, `.claude*`, `.*local`, `.editorconfig`, `.prettierrc*`, `.eslintrc*`, etc.
 
@@ -161,6 +165,7 @@ filedetective/
 │   ├── file_finder.py      # Priority-based file discovery with path/filename pattern matching
 │   ├── file_analyzer.py    # Dispatch to type-specific analyzers
 │   ├── history.py          # HistoryFinder for recent files (hist command)
+│   ├── git_utils.py        # Git status and commit info utilities
 │   └── tokenizer.py        # tiktoken wrapper with fallback
 ├── analyzers/
 │   ├── base_analyzer.py    # Abstract base with FileStats/AggregateStats dataclasses
@@ -221,6 +226,8 @@ Uses tiktoken with `cl100k_base` encoding. Fallback: `words * 1.3` if tiktoken u
 |------|------|-------------|
 | `-n` | `--count` | Number of files to show (default: 15) |
 | `-ft` | `--filetypes` | Filter by extension(s): `.md`, `md`, `*.env*`, `*local` |
+| `-g` | `--git` | Show git status column (M/A/?/✓) |
+| `-gd` | `--git-detail` | Show git status + last commit info |
 
 ## Troubleshooting
 

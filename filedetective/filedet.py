@@ -60,6 +60,8 @@ Examples:
   filedet hist                    # 15 most recent files in cwd
   filedet hist -n 30              # Adjust count
   filedet hist -ft .md .py        # Filter by file type
+  filedet hist -g                 # Show git status column
+  filedet hist -gd                # Show git status + last commit
   filedet hist -h                 # Show hist command help
         """
     )
@@ -170,7 +172,7 @@ def handle_grep(term: str, directory: str) -> int:
         return 1
 
 
-HIST_HELP = """usage: filedet hist [directory] [-n COUNT] [-ft EXT [EXT ...]]
+HIST_HELP = """usage: filedet hist [directory] [-n COUNT] [-ft EXT [EXT ...]] [-g] [-gd]
 
 Show recently modified files in a directory tree.
 
@@ -182,12 +184,16 @@ optional arguments:
   -n, --count COUNT     Number of files to show (default: 15)
   -ft, --filetypes EXT [EXT ...]
                         Filter by file extension(s). Accepts: .md, md, *.env*, *local
+  -g, --git             Show git status column (M=modified, A=staged, ?=untracked, ✓=clean)
+  -gd, --git-detail     Show git status + last commit info
 
 Examples:
   filedet hist                      # 15 recent in current directory
   filedet hist ~/projects -n 10     # 10 recent in specific directory
   filedet hist -ft .md .py          # Only markdown and python files
   filedet hist -ft .env* .*local    # Dotfiles matching patterns
+  filedet hist -g                   # Include git status column
+  filedet hist -gd                  # Include git status + last commit
 """
 
 
@@ -209,6 +215,8 @@ def handle_hist(args: list[str]) -> int:
     directory = "."
     count = 15
     filetypes = None
+    git_status = False
+    git_detail = False
 
     i = 0
     while i < len(args):
@@ -236,6 +244,14 @@ def handle_hist(args: list[str]) -> int:
                 display_error("-ft requires at least one file type")
                 return 1
 
+        elif arg in ('-g', '--git'):
+            git_status = True
+            i += 1
+
+        elif arg in ('-gd', '--git-detail'):
+            git_detail = True
+            i += 1
+
         elif arg.startswith('-'):
             display_error(f"Unknown flag: {arg}")
             print("Use 'filedet hist -h' for help")
@@ -259,10 +275,16 @@ def handle_hist(args: list[str]) -> int:
 
     # Find recent files
     finder = HistoryFinder()
-    entries = finder.find_recent(dir_path, count=count, filetypes=filetypes)
+    entries = finder.find_recent(
+        dir_path,
+        count=count,
+        filetypes=filetypes,
+        git_status=git_status or git_detail,
+        git_detail=git_detail
+    )
 
     if entries:
-        display_history_table(entries, dir_path)
+        display_history_table(entries, dir_path, show_git=git_status or git_detail, show_git_detail=git_detail)
         return 0
     else:
         if filetypes:
