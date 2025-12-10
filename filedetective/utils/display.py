@@ -341,8 +341,8 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
         dt = datetime.fromtimestamp(entry.modified_date, tz=pst)
         date_str = dt.strftime("%y.%m.%d %H:%M")
 
-        # Shorten path intelligently
-        display_path = shorten_path(entry.path, max_length=45)
+        # Replace home with ~
+        display_path = entry.path.replace(str(Path.home()), "~")
 
         row = [
             date_str,
