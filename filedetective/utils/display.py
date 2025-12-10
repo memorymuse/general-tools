@@ -313,9 +313,9 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
     table = Table(show_header=True, header_style="bold cyan", expand=True)
     table.add_column("Modified (PST)", style="dim", no_wrap=True, width=16)
     table.add_column("Ext", style="yellow", no_wrap=True, width=5)
-    table.add_column("Path", style="cyan", no_wrap=True, min_width=45)
-    table.add_column("Ln", justify="right", style="blue", no_wrap=True, width=6)
-    table.add_column("Toks", justify="right", style="magenta", no_wrap=True, width=6)
+    table.add_column("Path", style="cyan", no_wrap=True, ratio=1)  # Takes remaining space
+    table.add_column("Lines", justify="right", style="blue", no_wrap=True, width=6)
+    table.add_column("Tokens", justify="right", style="magenta", no_wrap=True, width=7)
 
     if show_git:
         table.add_column("Git", justify="center", no_wrap=True, min_width=3)
