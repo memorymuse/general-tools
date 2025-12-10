@@ -313,7 +313,7 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
     table = Table(show_header=True, header_style="bold cyan", expand=False)
     table.add_column("Modified (PST)", style="dim", no_wrap=True, width=16)
     table.add_column("Ext", style="yellow", no_wrap=True, width=5)
-    table.add_column("Path", style="cyan", no_wrap=True, overflow="ellipsis", max_width=38)
+    table.add_column("Path", style="cyan", no_wrap=True, overflow="ellipsis", max_width=45)
     table.add_column("Ln", justify="right", style="blue", no_wrap=True, width=6)
     table.add_column("Toks", justify="right", style="magenta", no_wrap=True, width=6)
 
@@ -342,7 +342,7 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
         date_str = dt.strftime("%y.%m.%d %H:%M")
 
         # Shorten path intelligently
-        display_path = shorten_path(entry.path, max_length=38)
+        display_path = shorten_path(entry.path, max_length=45)
 
         row = [
             date_str,
