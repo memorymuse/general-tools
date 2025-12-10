@@ -309,11 +309,11 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
     """
     from core.history import HistoryEntry  # Import here to avoid circular
 
-    # Create table - columns sized to fit ~100 char terminal width
-    table = Table(show_header=True, header_style="bold cyan", expand=False)
+    # Create table - expands to terminal width
+    table = Table(show_header=True, header_style="bold cyan", expand=True)
     table.add_column("Modified (PST)", style="dim", no_wrap=True, width=16)
     table.add_column("Ext", style="yellow", no_wrap=True, width=5)
-    table.add_column("Path", style="cyan", no_wrap=True, overflow="ellipsis", max_width=45)
+    table.add_column("Path", style="cyan", no_wrap=True)
     table.add_column("Ln", justify="right", style="blue", no_wrap=True, width=6)
     table.add_column("Toks", justify="right", style="magenta", no_wrap=True, width=6)
 
