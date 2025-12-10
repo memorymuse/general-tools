@@ -186,15 +186,15 @@ def _display_core_stats(stats: FileStats) -> None:
         console.print("  │  ".join(rate_parts))
 
 
-def shorten_path(path: str, max_length: int = 41) -> str:
+def shorten_path(path: str, max_length: int = 50) -> str:
     """Shorten a path intelligently for display.
 
-    Strategy:
-    1. Replace home dir with ~/
-    2. Shorten known directory names (projects -> prj, cc-projects -> cc-prj)
-    3. If still too long, progressively shorten middle directories
-    4. Keep first directory and filename intact when possible
-    5. If filename still too long, truncate middle-out
+    Strategy: Keep start (~/first_dir) and end (last_dir/filename) visible,
+    truncate middle directories with ...
+
+    Examples:
+        ~/cc-projects/general-tools/filedetective/docs/handoffs/somefile.md
+        -> ~/cc-projects/.../handoffs/somefile.md
 
     Args:
         path: Path string to shorten
@@ -203,80 +203,45 @@ def shorten_path(path: str, max_length: int = 41) -> str:
     Returns:
         Shortened path string
     """
-    # Step 1: Replace home with ~
+    # Replace home with ~
     home = str(Path.home())
     if path.startswith(home):
         path = "~" + path[len(home):]
 
-    # Step 2: Shorten known directory names (order matters - longer first)
-    path = path.replace("/cc-projects/", "/cc-prj/")
-    path = path.replace("/projects/", "/prj/")
-    path = path.replace("/general-tools/", "/gen-tools/")
-    path = path.replace("/filedetective/", "/filedet/")
-
-    # If short enough, return
+    # If short enough, return as-is
     if len(path) <= max_length:
         return path
 
-    # Step 3: Parse into parts
     parts = path.split("/")
-    if len(parts) <= 2:
-        # Just filename or ~/filename - truncate filename if needed
-        if len(path) > max_length:
-            return _truncate_middle(path, max_length)
-        return path
+    # Filter empty parts from leading /
+    parts = [p for p in parts if p]
 
-    # Keep first part (~ or root) and filename
-    first = parts[0] if parts[0] else ""  # Handle leading /
+    # Need at least 4 parts to do middle truncation meaningfully
+    if len(parts) <= 3:
+        return _truncate_middle(path, max_length)
+
+    # Keep first two parts and last two parts (parent dir + filename)
+    # ~/cc-projects + ... + handoffs/filename.md
+    start_part = parts[0] + "/" + parts[1] if len(parts) > 1 else parts[0]
+    last_dir = parts[-2]
     filename = parts[-1]
-    middle_parts = parts[1:-1] if first else parts[1:-1]
+    end_part = last_dir + "/" + filename
 
-    # Step 4: Progressively shorten middle directories only if needed
-    # Start with full names, then shorten one at a time from longest
-    current_middle = list(middle_parts)
+    # Try: start/.../end
+    candidate = start_part + "/.../" + end_part
+    if len(candidate) <= max_length:
+        return candidate
 
-    def build_path(mid_parts):
-        if first:
-            return first + "/" + "/".join(mid_parts) + "/" + filename
-        return "/" + "/".join(mid_parts) + "/" + filename
+    # Still too long - truncate the end part
+    prefix = start_part + "/.../"
+    available = max_length - len(prefix)
 
-    # Check if we need to shorten at all
-    current_path = build_path(current_middle)
-    if len(current_path) <= max_length:
-        return current_path
-
-    # Shorten directories progressively, longest first
-    while len(current_path) > max_length:
-        # Find longest directory that can be shortened
-        longest_idx = -1
-        longest_len = 4  # Don't shorten anything already 4 chars or less
-        for i, part in enumerate(current_middle):
-            if not part.endswith("*") and len(part) > longest_len:
-                longest_len = len(part)
-                longest_idx = i
-
-        if longest_idx == -1:
-            # Can't shorten directories further
-            break
-
-        # Shorten the longest directory
-        part = current_middle[longest_idx]
-        current_middle[longest_idx] = part[:3] + "*"
-        current_path = build_path(current_middle)
-
-    # If still too long, truncate filename middle-out
-    if len(current_path) > max_length:
-        prefix = first + "/" + "/".join(current_middle) + "/" if first else "/" + "/".join(current_middle) + "/"
-        remaining = max_length - len(prefix)
-        if remaining > 10:
-            filename = _truncate_middle(filename, remaining)
-        current_path = prefix + filename
-
-    # Final fallback: just truncate middle-out the whole thing
-    if len(current_path) > max_length:
-        current_path = _truncate_middle(current_path, max_length)
-
-    return current_path
+    if available > 15:
+        end_part = _truncate_middle(end_part, available)
+        return prefix + end_part
+    else:
+        # Very tight - just truncate the whole thing
+        return _truncate_middle(path, max_length)
 
 
 def _truncate_middle(s: str, max_length: int) -> str:
@@ -289,10 +254,10 @@ def _truncate_middle(s: str, max_length: int) -> str:
     if max_length < 10:
         return s[:max_length]
 
-    # Keep slightly more of the end (for file extensions)
     ellipsis = "..."
     available = max_length - len(ellipsis)
-    start_len = available // 2
+    # Keep more of the end (for file extensions and context)
+    start_len = available // 3
     end_len = available - start_len
 
     return s[:start_len] + ellipsis + s[-end_len:]
@@ -341,8 +306,8 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
         dt = datetime.fromtimestamp(entry.modified_date, tz=pst)
         date_str = dt.strftime("%y.%m.%d %H:%M")
 
-        # Replace home with ~
-        display_path = entry.path.replace(str(Path.home()), "~")
+        # Shorten path: keep start + last_dir/filename, truncate middle
+        display_path = shorten_path(entry.path, max_length=60)
 
         row = [
             date_str,
