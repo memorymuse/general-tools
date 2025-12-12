@@ -189,12 +189,12 @@ def _display_core_stats(stats: FileStats) -> None:
 def shorten_path(path: str, max_length: int = 50) -> str:
     """Shorten a path intelligently for display.
 
-    Strategy: Keep start (~/first_dir) and end (last_dir/filename) visible,
-    truncate middle directories with ...
+    Strategy: Truncate from the LEFT, keeping the right side (filename) intact.
+    This preserves the most useful part for identification.
 
     Examples:
         ~/cc-projects/general-tools/filedetective/docs/handoffs/somefile.md
-        -> ~/cc-projects/.../handoffs/somefile.md
+        -> …/docs/handoffs/somefile.md
 
     Args:
         path: Path string to shorten
@@ -212,36 +212,10 @@ def shorten_path(path: str, max_length: int = 50) -> str:
     if len(path) <= max_length:
         return path
 
-    parts = path.split("/")
-    # Filter empty parts from leading /
-    parts = [p for p in parts if p]
-
-    # Need at least 4 parts to do middle truncation meaningfully
-    if len(parts) <= 3:
-        return _truncate_middle(path, max_length)
-
-    # Keep first two parts and last two parts (parent dir + filename)
-    # ~/cc-projects + ... + handoffs/filename.md
-    start_part = parts[0] + "/" + parts[1] if len(parts) > 1 else parts[0]
-    last_dir = parts[-2]
-    filename = parts[-1]
-    end_part = last_dir + "/" + filename
-
-    # Try: start/.../end
-    candidate = start_part + "/.../" + end_part
-    if len(candidate) <= max_length:
-        return candidate
-
-    # Still too long - truncate the end part
-    prefix = start_part + "/.../"
-    available = max_length - len(prefix)
-
-    if available > 15:
-        end_part = _truncate_middle(end_part, available)
-        return prefix + end_part
-    else:
-        # Very tight - just truncate the whole thing
-        return _truncate_middle(path, max_length)
+    # Truncate from left, keep right side intact
+    # Use single ellipsis char (…) to save space
+    available = max_length - 1  # for "…"
+    return "…" + path[-available:]
 
 
 def _truncate_middle(s: str, max_length: int) -> str:
@@ -274,16 +248,37 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
     """
     from core.history import HistoryEntry  # Import here to avoid circular
 
+    # Calculate available width for Path column dynamically
+    # When git mode is active, drop Lines/Tokens columns to make room
+    # Column widths + borders (│) + cell padding (1 space each side per cell)
+    terminal_width = console.width or 80
+
+    if show_git or show_git_detail:
+        # Git mode: Modified(14) + Ext(4) + Git(3) = 21 content
+        # 4 columns = 5 borders + 8 padding = 13 overhead
+        fixed_width = 21 + 13
+        if show_git_detail:
+            fixed_width += 25 + 3  # Last Commit column (25) + border + padding
+    else:
+        # Normal mode: Modified(14) + Ext(4) + Lines(6) + Tokens(7) = 31 content
+        # 5 columns = 6 borders + 10 padding = 16 overhead
+        fixed_width = 31 + 16
+
+    path_width = max(30, terminal_width - fixed_width)
+
     # Create table - expands to terminal width
     table = Table(show_header=True, header_style="bold cyan", expand=True)
-    table.add_column("Modified (PST)", style="dim", no_wrap=True, width=16)
-    table.add_column("Ext", style="yellow", no_wrap=True, width=5)
-    table.add_column("Path", style="cyan")
-    table.add_column("Lines", justify="right", style="blue", no_wrap=True, width=6)
-    table.add_column("Tokens", justify="right", style="magenta", no_wrap=True, width=7)
+    table.add_column("Modified", style="dim", no_wrap=True, width=14)
+    table.add_column("Ext", style="yellow", no_wrap=True, width=4)
+    table.add_column("Path", style="cyan", no_wrap=True, ratio=1)
 
-    if show_git:
-        table.add_column("Git", justify="center", no_wrap=True, min_width=3)
+    # Lines/Tokens only shown in non-git mode
+    if not show_git and not show_git_detail:
+        table.add_column("Lines", justify="right", style="blue", no_wrap=True, width=6)
+        table.add_column("Tokens", justify="right", style="magenta", no_wrap=True, width=7)
+
+    if show_git or show_git_detail:
+        table.add_column("Git", justify="center", no_wrap=True, width=3)
 
     if show_git_detail:
         table.add_column("Last Commit", style="dim", no_wrap=True, overflow="ellipsis", max_width=25)
@@ -306,24 +301,29 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
         dt = datetime.fromtimestamp(entry.modified_date, tz=pst)
         date_str = dt.strftime("%y.%m.%d %H:%M")
 
-        # Shorten path: keep start + last_dir/filename, truncate middle
-        display_path = shorten_path(entry.path, max_length=60)
+        # Shorten path to fit within calculated width (left-truncation)
+        # Subtract 2 for Rich's internal cell padding
+        display_path = shorten_path(entry.path, max_length=path_width - 2)
 
         row = [
             date_str,
             entry.extension,
             display_path,
-            f"{entry.lines:,}",
-            f"{entry.tokens:,}",
         ]
 
-        if show_git:
+        # Lines/Tokens only in non-git mode
+        if not show_git and not show_git_detail:
+            row.append(f"{entry.lines:,}")
+            row.append(f"{entry.tokens:,}")
+
+        # Git status in git modes
+        if show_git or show_git_detail:
             status = entry.git_status or "-"
             row.append(git_status_style.get(status, status))
 
+        # Last commit in detail mode
         if show_git_detail:
             if entry.git_commit_relative and entry.git_commit_msg:
-                # Truncate message if needed
                 msg = entry.git_commit_msg
                 if len(msg) > 20:
                     msg = msg[:17] + "..."
