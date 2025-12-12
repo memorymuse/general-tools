@@ -96,6 +96,8 @@ filedet hist -h                   # Show hist-specific help
 
 **Git status values**: `M` = modified, `A` = staged, `?` = untracked, `✓` = clean, `!` = ignored, `-` = not in repo
 
+**Note**: `-g` and `-gd` modes hide Lines/Tokens columns to give Path more display space.
+
 **Included dotfiles**: `.gitignore`, `.env*`, `.claude*`, `.*local`, `.editorconfig`, `.prettierrc*`, `.eslintrc*`, etc.
 
 **Excluded**: `.git/`, `.venv/`, `node_modules/`, `__pycache__/`, `*.pyc`, `*.lock`, `.DS_Store`, etc.
