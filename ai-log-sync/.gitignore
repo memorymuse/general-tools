@@ -44,7 +44,7 @@ htmlcov/
 staging/
 inbox/
 *.log
-sync.log
+!sync.log
 
 # OS
 .DS_Store
