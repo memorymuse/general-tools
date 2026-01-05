@@ -4,6 +4,10 @@
 system-backup/
 .cc-secrets-whitelist
 
+# Secrets vault (plaintext - NEVER commit!)
+secrets.yaml
+# Note: secrets.yaml.age (encrypted) IS tracked for cross-machine sync
+
 # Test artifacts
 .cc-test-*
 tests/fixtures/*.test

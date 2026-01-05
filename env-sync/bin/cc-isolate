@@ -16,6 +16,7 @@ ENV_SYNC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Import libraries
 source "$ENV_SYNC_ROOT/lib/platform.sh"
 source "$ENV_SYNC_ROOT/lib/secrets.sh"
+source "$ENV_SYNC_ROOT/lib/secrets-sync.sh"
 
 # Configuration
 CONFIG_FILE="${CC_ISOLATE_CONFIG:-$ENV_SYNC_ROOT/config.sh}"
@@ -591,6 +592,23 @@ ${BOLD}COMMANDS:${RESET}
   ${CYAN}secrets template <file>${RESET} Create template from file with secrets
   ${CYAN}secrets check [path]${RESET}  Check for unconverted placeholders
 
+  ${CYAN}vault init${RESET}            Create empty secrets.yaml template
+  ${CYAN}vault export [dirs...]${RESET} Export env files to secrets.yaml
+  ${CYAN}vault encrypt${RESET}         Encrypt secrets.yaml -> secrets.yaml.age
+  ${CYAN}vault decrypt${RESET}         Decrypt secrets.yaml.age -> secrets.yaml
+  ${CYAN}vault deploy${RESET}          Deploy secrets to ~/.env.secrets and project .env
+  ${CYAN}vault edit${RESET}            Edit secrets (decrypt -> editor -> re-encrypt)
+  ${CYAN}vault diff${RESET}            Show differences between vault and deployed
+  ${CYAN}vault pull${RESET}            Git pull + decrypt + deploy
+  ${CYAN}vault push [msg]${RESET}      Encrypt + commit + push
+
+  ${CYAN}push [msg]${RESET}            Push EVERYTHING (configs + secrets) to git
+  ${CYAN}pull${RESET}                  Pull EVERYTHING from git and deploy
+
+  ${CYAN}tools check${RESET}           Check which tools are installed/missing
+  ${CYAN}tools install${RESET}         Install missing tools for current platform
+  ${CYAN}tools list${RESET}            List all tools in manifest
+
   ${CYAN}config${RESET}                Show current configuration
   ${CYAN}help${RESET}                  Show this help message
   ${CYAN}version${RESET}               Show version
@@ -625,6 +643,20 @@ ${BOLD}EXAMPLES:${RESET}
 
   # Create a new profile
   cc-isolate profile create web-dev
+
+  # Export all env files from home and projects
+  cc-isolate vault export ~ ~/projects
+
+  # Edit secrets (opens in \$EDITOR, re-encrypts on save)
+  cc-isolate vault edit
+
+  # Deploy secrets to local machine
+  cc-isolate vault deploy
+
+  # Sync secrets to another machine
+  cc-isolate vault push "Add new API keys"
+  # On the other machine:
+  cc-isolate vault pull
 
 ${BOLD}FILES:${RESET}
   Config:       $CONFIG_FILE
@@ -1202,6 +1234,583 @@ cmd_secrets_check() {
 }
 
 #------------------------------------------------------------------------------
+# Vault Commands (Encrypted Secrets Sync)
+#------------------------------------------------------------------------------
+
+cmd_vault_init() {
+    print_header
+    log_info "Initializing secrets vault"
+    echo
+    secrets_init
+}
+
+cmd_vault_export() {
+    print_header
+    log_info "Exporting env files to secrets vault"
+    echo
+    secrets_export "$@"
+}
+
+cmd_vault_encrypt() {
+    print_header
+    log_info "Encrypting secrets vault"
+    echo
+    secrets_encrypt
+}
+
+cmd_vault_decrypt() {
+    print_header
+    log_info "Decrypting secrets vault"
+    echo
+    secrets_decrypt
+}
+
+cmd_vault_deploy() {
+    print_header
+    log_info "Deploying secrets from vault"
+    echo
+    secrets_deploy
+}
+
+cmd_vault_edit() {
+    print_header
+    log_info "Editing secrets vault"
+    echo
+    secrets_edit
+}
+
+cmd_vault_diff() {
+    print_header
+    log_info "Comparing vault with deployed secrets"
+    echo
+    secrets_diff
+}
+
+cmd_vault_push() {
+    print_header
+    check_git_repo
+
+    local message="${1:-Update secrets vault}"
+
+    log_info "Pushing secrets vault to remote"
+    echo
+
+    cd "$ENV_SYNC_ROOT"
+
+    # Ensure secrets are encrypted
+    if [[ -f "$SECRETS_YAML" ]]; then
+        log_warn "Plaintext secrets.yaml found - encrypting first"
+        if ! secrets_encrypt; then
+            die "Failed to encrypt secrets"
+        fi
+        echo
+    fi
+
+    if [[ ! -f "$SECRETS_ENCRYPTED" ]]; then
+        die "No encrypted secrets to push. Run 'cc-isolate vault encrypt' first."
+    fi
+
+    # Check if encrypted file has changes
+    local changes=$(git status --porcelain "$SECRETS_ENCRYPTED" 2>/dev/null || true)
+
+    if [[ -z "$changes" ]]; then
+        log_info "No changes to push in secrets vault"
+        return 0
+    fi
+
+    log_info "Staging encrypted secrets..."
+    git add "$SECRETS_ENCRYPTED"
+    log_success "Staged"
+
+    log_info "Committing..."
+    if git commit -m "$message"; then
+        log_success "Committed"
+
+        log_info "Pushing to remote..."
+        if git push; then
+            log_success "Pushed to remote"
+            echo
+            log_success "${BOLD}Secrets vault synced to repository!${RESET}"
+        else
+            log_error "Failed to push to remote"
+            return 1
+        fi
+    else
+        log_warn "No changes to commit"
+    fi
+    echo
+}
+
+cmd_vault_pull() {
+    print_header
+    check_git_repo
+
+    log_info "Pulling secrets vault from remote"
+    echo
+
+    cd "$ENV_SYNC_ROOT"
+
+    # Pull latest
+    log_info "Pulling from remote..."
+    if git pull; then
+        log_success "Pulled from remote"
+        echo
+    else
+        log_error "Failed to pull from remote"
+        return 1
+    fi
+
+    # Check if encrypted secrets exist
+    if [[ ! -f "$SECRETS_ENCRYPTED" ]]; then
+        log_warn "No encrypted secrets found in repository"
+        return 0
+    fi
+
+    # Deploy
+    log_info "Deploying secrets..."
+    secrets_deploy
+
+    echo
+    log_success "${BOLD}Secrets vault synced from repository!${RESET}"
+    echo
+}
+
+#------------------------------------------------------------------------------
+# Unified Push/Pull (Everything)
+#------------------------------------------------------------------------------
+
+cmd_push() {
+    print_header
+    check_git_repo
+
+    local message="${1:-Sync $(date +%Y-%m-%d\ %H:%M)}"
+
+    log_info "Syncing environment to remote..."
+    echo
+
+    cd "$ENV_SYNC_ROOT"
+
+    # 1. Encrypt secrets if plaintext exists (one password prompt, then automatic)
+    if [[ -f "$SECRETS_YAML" ]]; then
+        log_info "Step 1/4: Encrypting secrets..."
+        if ! secrets_encrypt --auto; then
+            die "Failed to encrypt secrets"
+        fi
+    else
+        log_info "Step 1/4: Secrets already encrypted"
+    fi
+
+    # 2. Check for any changes
+    local changes=$(git status --porcelain "$ENV_SYNC_ROOT" 2>/dev/null | grep -v secrets.yaml.backup || true)
+
+    if [[ -z "$changes" ]]; then
+        echo
+        log_success "Already in sync - no changes to push"
+        return 0
+    fi
+
+    echo
+    log_info "Step 2/4: Changes detected:"
+    echo "$changes" | sed 's/^/  /'
+    echo
+
+    # 3. Secret scan on non-vault files (quick, silent unless issues)
+    if [[ "$SECRET_SCAN_ENABLED" == "true" ]]; then
+        local scan_failed=false
+        while IFS= read -r line; do
+            local file="${line:3}"
+            [[ "$file" == "secrets.yaml.age" ]] && continue
+            [[ "$file" == "tools.yaml" ]] && continue
+            [[ ! -f "$file" ]] && continue
+
+            if [[ "$file" == dotfiles/* ]] || [[ "$file" == profiles/* ]] || [[ "$file" == bashrc.d/* ]]; then
+                if ! scan_file "$file" 2>/dev/null; then
+                    echo -e "  ${RED}✗${RESET} $file ${YELLOW}(secrets detected)${RESET}"
+                    scan_failed=true
+                fi
+            fi
+        done <<< "$changes"
+
+        if [[ "$scan_failed" == "true" ]] && [[ "$SECRET_BLOCK_PUSH" == "true" ]]; then
+            log_error "Push blocked - secrets detected in config files"
+            log_info "Use vault for secrets, not config files"
+            return 1
+        fi
+    fi
+
+    # 4. Stage, commit, push (all automatic)
+    log_info "Step 3/4: Committing..."
+    git add "$ENV_SYNC_ROOT/dotfiles/" "$ENV_SYNC_ROOT/profiles/" "$ENV_SYNC_ROOT/bashrc.d/" "$ENV_SYNC_ROOT/config.sh" "$ENV_SYNC_ROOT/tools.yaml" "$ENV_SYNC_ROOT/bin/" "$ENV_SYNC_ROOT/lib/" "$ENV_SYNC_ROOT/.gitignore" 2>/dev/null || true
+    [[ -f "$SECRETS_ENCRYPTED" ]] && git add "$SECRETS_ENCRYPTED"
+
+    if git commit -m "$message"; then
+        log_info "Step 4/4: Pushing to remote..."
+        if git push; then
+            echo
+            log_success "${BOLD}Environment synced!${RESET}"
+        else
+            log_error "Failed to push"
+            return 1
+        fi
+    else
+        log_success "Already in sync"
+    fi
+    echo
+}
+
+cmd_pull() {
+    print_header
+    check_git_repo
+
+    log_info "Syncing environment from remote..."
+    echo
+
+    cd "$ENV_SYNC_ROOT"
+
+    # 1. Check for uncommitted changes - auto-stash
+    local has_changes=false
+    local stashed=false
+    for dir in dotfiles/ profiles/ bashrc.d/ config.sh tools.yaml; do
+        if ! git diff-index --quiet HEAD -- "$dir" 2>/dev/null; then
+            has_changes=true
+            break
+        fi
+    done
+
+    if $has_changes; then
+        log_info "Step 1/4: Stashing local changes..."
+        git stash push -m "devenv: Auto-stash $(date +%Y-%m-%d\ %H:%M)"
+        stashed=true
+    else
+        log_info "Step 1/4: No local changes to stash"
+    fi
+
+    # 2. Pull with merge conflict detection
+    log_info "Step 2/4: Pulling from remote..."
+    local pull_output
+    if ! pull_output=$(git pull 2>&1); then
+        echo "$pull_output"
+
+        # Check for merge conflicts
+        if echo "$pull_output" | grep -q "CONFLICT\|Merge conflict"; then
+            echo
+            log_error "Merge conflicts detected!"
+            echo
+            log_info "Conflicting files:"
+            git diff --name-only --diff-filter=U | sed 's/^/  /'
+            echo
+            log_info "To resolve:"
+            echo -e "  1. Edit conflicting files to resolve conflicts"
+            echo -e "  2. Run: ${CYAN}git add <resolved-files>${RESET}"
+            echo -e "  3. Run: ${CYAN}git commit${RESET}"
+            echo -e "  4. Run: ${CYAN}devenv pull${RESET} again"
+            echo
+            log_info "Or to abort: ${CYAN}git merge --abort${RESET}"
+            return 1
+        fi
+
+        log_error "Failed to pull"
+        return 1
+    fi
+    log_success "Pulled"
+
+    # 3. Deploy secrets (one password prompt, then automatic)
+    if [[ -f "$SECRETS_ENCRYPTED" ]]; then
+        echo
+        log_info "Step 3/4: Deploying secrets..."
+        secrets_deploy --auto
+    else
+        log_info "Step 3/4: No secrets vault found"
+    fi
+
+    # 4. Sync dotfiles and reload
+    echo
+    log_info "Step 4/4: Syncing dotfiles..."
+    cmd_dotfiles_sync 2>/dev/null || true
+
+    # Reload config
+    [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+
+    # Re-apply stash if we stashed earlier
+    if $stashed; then
+        echo
+        log_info "Re-applying stashed changes..."
+        if git stash pop 2>/dev/null; then
+            log_success "Local changes restored"
+        else
+            log_warn "Stash conflict - your changes are in: git stash list"
+            log_info "Resolve with: ${CYAN}git stash show -p | git apply${RESET}"
+        fi
+    fi
+
+    echo
+    log_success "${BOLD}Environment synced!${RESET}"
+    echo
+}
+
+#------------------------------------------------------------------------------
+# Tools Management
+#------------------------------------------------------------------------------
+
+TOOLS_FILE="$ENV_SYNC_ROOT/tools.yaml"
+
+# Detect current platform
+get_current_platform() {
+    if is_macos; then
+        echo "macos"
+    elif is_wsl; then
+        echo "wsl"
+    else
+        echo "linux"
+    fi
+}
+
+# Simple YAML parser for tools.yaml
+# Returns tool info in format: name|description|check_cmd|install_method
+parse_tools_yaml() {
+    local platform="$1"
+    local current_tool=""
+    local description=""
+    local check_cmd=""
+    local required=""
+    local install_brew=""
+    local install_apt=""
+    local install_npm=""
+    local install_script=""
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip comments and empty lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// }" ]] && continue
+
+        # New tool entry (no leading whitespace, ends with :)
+        if [[ "$line" =~ ^[[:space:]]{2}([a-z0-9_-]+):$ ]]; then
+            # Output previous tool if exists
+            if [[ -n "$current_tool" ]] && [[ "$required" == "true" ]]; then
+                echo "${current_tool}|${description}|${check_cmd}|${install_brew}|${install_apt}|${install_npm}|${install_script}"
+            fi
+            current_tool="${BASH_REMATCH[1]}"
+            description=""
+            check_cmd=""
+            required=""
+            install_brew=""
+            install_apt=""
+            install_npm=""
+            install_script=""
+            continue
+        fi
+
+        # Parse fields
+        if [[ "$line" =~ ^[[:space:]]+description:[[:space:]]*\"(.*)\" ]]; then
+            description="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+check:[[:space:]]*\"(.*)\" ]]; then
+            check_cmd="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+${platform}:[[:space:]]*(.+) ]]; then
+            required="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+brew:[[:space:]]*\"?([^\"]*)\"? ]]; then
+            install_brew="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+brew_cask:[[:space:]]*\"?([^\"]*)\"? ]]; then
+            install_brew="--cask ${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+apt:[[:space:]]*\"?([^\"]*)\"? ]]; then
+            install_apt="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+npm:[[:space:]]*\"?([^\"]*)\"? ]]; then
+            install_npm="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+script:[[:space:]]*\"(.*)\" ]]; then
+            install_script="${BASH_REMATCH[1]}"
+        fi
+    done < "$TOOLS_FILE"
+
+    # Output last tool
+    if [[ -n "$current_tool" ]] && [[ "$required" == "true" ]]; then
+        echo "${current_tool}|${description}|${check_cmd}|${install_brew}|${install_apt}|${install_npm}|${install_script}"
+    fi
+}
+
+cmd_tools_check() {
+    print_header
+
+    if [[ ! -f "$TOOLS_FILE" ]]; then
+        die "Tools manifest not found: $TOOLS_FILE"
+    fi
+
+    local platform=$(get_current_platform)
+    log_info "Checking tools for platform: ${BOLD}${platform}${RESET}"
+    echo
+
+    local missing=0
+    local installed=0
+    local missing_tools=""
+
+    echo -e "${BOLD}Tool             Status      Description${RESET}"
+    echo "---------------  ----------  -----------"
+
+    while IFS='|' read -r name desc check brew apt npm script; do
+        [[ -z "$name" ]] && continue
+
+        # Run check command
+        if eval "$check" &>/dev/null; then
+            printf "%-16s ${GREEN}installed${RESET}   %s\n" "$name" "$desc"
+            installed=$((installed + 1))
+        else
+            printf "%-16s ${RED}missing${RESET}     %s\n" "$name" "$desc"
+            missing=$((missing + 1))
+            missing_tools="${missing_tools}${name}|${desc}|${check}|${brew}|${apt}|${npm}|${script}\n"
+        fi
+    done < <(parse_tools_yaml "$platform")
+
+    echo
+    echo -e "${BOLD}Summary:${RESET} ${GREEN}${installed} installed${RESET}, ${RED}${missing} missing${RESET}"
+
+    if [[ $missing -gt 0 ]]; then
+        echo
+        log_info "To install missing tools: ${CYAN}cc-isolate tools install${RESET}"
+    fi
+    echo
+}
+
+cmd_tools_install() {
+    print_header
+
+    if [[ ! -f "$TOOLS_FILE" ]]; then
+        die "Tools manifest not found: $TOOLS_FILE"
+    fi
+
+    local platform=$(get_current_platform)
+    log_info "Installing missing tools for platform: ${BOLD}${platform}${RESET}"
+    echo
+
+    local to_install=()
+
+    # Find missing tools
+    while IFS='|' read -r name desc check brew apt npm script; do
+        [[ -z "$name" ]] && continue
+
+        if ! eval "$check" &>/dev/null; then
+            to_install+=("${name}|${desc}|${check}|${brew}|${apt}|${npm}|${script}")
+        fi
+    done < <(parse_tools_yaml "$platform")
+
+    if [[ ${#to_install[@]} -eq 0 ]]; then
+        log_success "All tools are already installed!"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD}Missing tools to install:${RESET}"
+    for entry in "${to_install[@]}"; do
+        IFS='|' read -r name desc _ _ _ _ _ <<< "$entry"
+        echo "  - $name ($desc)"
+    done
+    echo
+
+    read -p "Install ${#to_install[@]} missing tool(s)? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Cancelled"
+        return 0
+    fi
+
+    echo
+
+    for entry in "${to_install[@]}"; do
+        IFS='|' read -r name desc check brew apt npm script <<< "$entry"
+
+        echo -e "${CYAN}Installing:${RESET} $name"
+
+        local install_cmd=""
+
+        # Determine install method based on platform
+        if [[ "$platform" == "macos" ]]; then
+            if [[ -n "$brew" ]]; then
+                install_cmd="brew install $brew"
+            elif [[ -n "$npm" ]]; then
+                install_cmd="npm install -g $npm"
+            elif [[ -n "$script" ]]; then
+                install_cmd="$script"
+            fi
+        else
+            # WSL/Linux
+            if [[ -n "$apt" ]]; then
+                install_cmd="sudo apt-get install -y $apt"
+            elif [[ -n "$npm" ]]; then
+                install_cmd="npm install -g $npm"
+            elif [[ -n "$script" ]]; then
+                install_cmd="$script"
+            elif [[ -n "$brew" ]] && command -v brew &>/dev/null; then
+                install_cmd="brew install $brew"
+            fi
+        fi
+
+        if [[ -z "$install_cmd" ]]; then
+            log_warn "  No install method available for $name on $platform"
+            continue
+        fi
+
+        log_info "  Running: $install_cmd"
+        if eval "$install_cmd"; then
+            log_success "  Installed $name"
+        else
+            log_error "  Failed to install $name"
+        fi
+        echo
+    done
+
+    log_success "Done!"
+    echo
+}
+
+cmd_tools_list() {
+    print_header
+
+    if [[ ! -f "$TOOLS_FILE" ]]; then
+        die "Tools manifest not found: $TOOLS_FILE"
+    fi
+
+    log_info "Tools manifest: $TOOLS_FILE"
+    echo
+
+    echo -e "${BOLD}Tool             macOS  WSL    Description${RESET}"
+    echo "---------------  -----  -----  -----------"
+
+    local current_tool=""
+    local description=""
+    local macos=""
+    local wsl=""
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// }" ]] && continue
+
+        if [[ "$line" =~ ^[[:space:]]{2}([a-z0-9_-]+):$ ]]; then
+            if [[ -n "$current_tool" ]]; then
+                local macos_mark=$([[ "$macos" == "true" ]] && echo "  *  " || echo "     ")
+                local wsl_mark=$([[ "$wsl" == "true" ]] && echo "  *  " || echo "     ")
+                printf "%-16s %s  %s  %s\n" "$current_tool" "$macos_mark" "$wsl_mark" "$description"
+            fi
+            current_tool="${BASH_REMATCH[1]}"
+            description=""
+            macos=""
+            wsl=""
+        elif [[ "$line" =~ ^[[:space:]]+description:[[:space:]]*\"(.*)\" ]]; then
+            description="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+macos:[[:space:]]*(.+) ]]; then
+            macos="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^[[:space:]]+wsl:[[:space:]]*(.+) ]]; then
+            wsl="${BASH_REMATCH[1]}"
+        fi
+    done < "$TOOLS_FILE"
+
+    # Last tool
+    if [[ -n "$current_tool" ]]; then
+        local macos_mark=$([[ "$macos" == "true" ]] && echo "  *  " || echo "     ")
+        local wsl_mark=$([[ "$wsl" == "true" ]] && echo "  *  " || echo "     ")
+        printf "%-16s %s  %s  %s\n" "$current_tool" "$macos_mark" "$wsl_mark" "$description"
+    fi
+
+    echo
+}
+
+#------------------------------------------------------------------------------
 # Main Entry Point
 #------------------------------------------------------------------------------
 
@@ -1294,6 +1903,77 @@ main() {
                     ;;
                 *)
                     die "Unknown secrets command: $subcommand"
+                    ;;
+            esac
+            ;;
+        vault)
+            local subcommand="${1:-help}"
+            shift || true
+            case "$subcommand" in
+                init)
+                    cmd_vault_init
+                    ;;
+                export)
+                    cmd_vault_export "$@"
+                    ;;
+                encrypt)
+                    cmd_vault_encrypt
+                    ;;
+                decrypt)
+                    cmd_vault_decrypt
+                    ;;
+                deploy)
+                    cmd_vault_deploy
+                    ;;
+                edit)
+                    cmd_vault_edit
+                    ;;
+                diff)
+                    cmd_vault_diff
+                    ;;
+                push)
+                    cmd_vault_push "$@"
+                    ;;
+                pull)
+                    cmd_vault_pull
+                    ;;
+                help|*)
+                    echo "Usage: cc-isolate vault <command>"
+                    echo ""
+                    echo "Commands:"
+                    echo "  init      Create empty secrets.yaml template"
+                    echo "  export    Export env files to secrets.yaml"
+                    echo "  encrypt   Encrypt secrets.yaml -> secrets.yaml.age"
+                    echo "  decrypt   Decrypt secrets.yaml.age -> secrets.yaml"
+                    echo "  deploy    Deploy secrets to ~/.env.secrets and project .env"
+                    echo "  edit      Edit secrets (decrypt -> editor -> re-encrypt)"
+                    echo "  diff      Show differences between vault and deployed"
+                    echo "  push      Encrypt + commit + push to git"
+                    echo "  pull      Git pull + decrypt + deploy"
+                    ;;
+            esac
+            ;;
+        push)
+            cmd_push "$@"
+            ;;
+        pull)
+            cmd_pull
+            ;;
+        tools)
+            local subcommand="${1:-check}"
+            shift || true
+            case "$subcommand" in
+                check)
+                    cmd_tools_check
+                    ;;
+                install)
+                    cmd_tools_install
+                    ;;
+                list)
+                    cmd_tools_list
+                    ;;
+                *)
+                    die "Unknown tools command: $subcommand"
                     ;;
             esac
             ;;

@@ -1,0 +1,288 @@
+# Tools Manifest for cc-isolate
+# Generated: 2026-01-04
+#
+# Usage:
+#   cc-isolate tools check   - Show missing tools
+#   cc-isolate tools install - Install missing tools
+#
+# Columns:
+#   macos: Required on macOS
+#   wsl:   Required on WSL/Linux
+
+tools:
+
+  # ============================================================================
+  # AI / Dev Tools
+  # ============================================================================
+
+  claude:
+    description: "Claude Code CLI"
+    macos: true
+    wsl: true
+    check: "claude --version"
+    install:
+      npm: "@anthropic-ai/claude-code"
+
+  codex:
+    description: "OpenAI Codex CLI"
+    macos: true
+    wsl: true
+    check: "codex --version"
+    install:
+      brew_cask: "codex"
+      npm: "@openai/codex"
+
+  gemini-cli:
+    description: "Google Gemini CLI"
+    macos: true
+    wsl: true
+    check: "gemini --version"
+    install:
+      brew: "gemini-cli"
+
+  jules:
+    description: "Google Jules AI"
+    macos: true
+    wsl: true
+    check: "jules --version"
+    install:
+      npm: "@google/jules"
+
+  # ============================================================================
+  # Databases
+  # ============================================================================
+
+  surreal:
+    description: "SurrealDB CLI"
+    macos: true
+    wsl: true
+    check: "surreal version"
+    install:
+      brew: "surrealdb/tap/surreal"
+      script: "curl -sSf https://install.surrealdb.com | sh"
+
+  turso:
+    description: "Turso DB CLI"
+    macos: true
+    wsl: true
+    check: "turso --version"
+    install:
+      brew: "tursodatabase/tap/turso"
+      script: "curl -sSfL https://get.turso.tech | bash"
+
+  libsql:
+    description: "libSQL (SQLite fork)"
+    macos: true
+    wsl: true
+    check: "brew list libsql &>/dev/null || [ -f /opt/homebrew/opt/libsql/bin/sqld ]"
+    install:
+      brew: "libsql"
+      note: "WSL: build from source (requires cmake)"
+
+  sqld:
+    description: "libSQL server daemon"
+    macos: true
+    wsl: true
+    check: "sqld --version"
+    install:
+      brew: "sqld"
+      note: "WSL: build from source"
+
+  # ============================================================================
+  # Cloud / Deploy
+  # ============================================================================
+
+  vercel:
+    description: "Vercel CLI"
+    macos: true
+    wsl: true
+    check: "vercel --version"
+    install:
+      brew: "vercel-cli"
+      npm: "vercel"
+
+  gcloud:
+    description: "Google Cloud CLI"
+    macos: true
+    wsl: true
+    check: "gcloud --version"
+    install:
+      brew_cask: "gcloud-cli"
+      script: "curl https://sdk.cloud.google.com | bash"
+
+  rclone:
+    description: "Cloud storage sync"
+    macos: true
+    wsl: true
+    check: "rclone --version"
+    install:
+      brew: "rclone"
+      apt: "rclone"
+
+  # ============================================================================
+  # Dev Utils
+  # ============================================================================
+
+  gh:
+    description: "GitHub CLI"
+    macos: true
+    wsl: true
+    check: "gh --version"
+    install:
+      brew: "gh"
+      apt: "gh"
+
+  git-lfs:
+    description: "Git Large File Storage"
+    macos: true
+    wsl: true
+    check: "git-lfs --version"
+    install:
+      brew: "git-lfs"
+      apt: "git-lfs"
+
+  direnv:
+    description: "Auto-load .envrc files"
+    macos: true
+    wsl: true
+    check: "direnv --version"
+    install:
+      brew: "direnv"
+      apt: "direnv"
+
+  rg:
+    description: "ripgrep - fast grep"
+    macos: true
+    wsl: true
+    check: "rg --version"
+    install:
+      brew: "ripgrep"
+      apt: "ripgrep"
+
+  cmake:
+    description: "Build system (needed for libsql)"
+    macos: true
+    wsl: true
+    check: "cmake --version"
+    install:
+      brew: "cmake"
+      apt: "cmake"
+
+  jq:
+    description: "JSON processor"
+    macos: true
+    wsl: true
+    check: "jq --version"
+    install:
+      brew: "jq"
+      apt: "jq"
+
+  coreutils:
+    description: "GNU core utilities"
+    macos: true
+    wsl:
+    check: "gls --version"
+    install:
+      brew: "coreutils"
+      note: "Already included in Linux"
+
+  # ============================================================================
+  # Python
+  # ============================================================================
+
+  uv:
+    description: "Fast Python package manager"
+    macos: true
+    wsl: true
+    check: "~/.local/bin/uv --version || uv --version"
+    install:
+      script: "curl -LsSf https://astral.sh/uv/install.sh | sh"
+
+  pipx:
+    description: "Install Python apps in isolation"
+    macos: true
+    wsl: true
+    check: "pipx --version"
+    install:
+      brew: "pipx"
+      apt: "pipx"
+
+  pip-tools:
+    description: "Python dependency management"
+    macos: true
+    wsl: true
+    check: "pip-compile --version"
+    install:
+      brew: "pip-tools"
+      pipx: "pip-tools"
+
+  # ============================================================================
+  # Node.js
+  # ============================================================================
+
+  nvm:
+    description: "Node Version Manager"
+    macos: true
+    wsl: true
+    check: "[ -d ~/.nvm ] || [ -n \"$NVM_DIR\" ]"
+    install:
+      script: "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash"
+
+  node:
+    description: "Node.js runtime"
+    macos: true
+    wsl: true
+    check: "node --version"
+    install:
+      brew: "node"
+      nvm: "node"
+      note: "Prefer nvm for version management"
+
+  pnpm:
+    description: "Fast npm alternative"
+    macos: true
+    wsl: true
+    check: "pnpm --version"
+    install:
+      npm: "pnpm"
+
+  # ============================================================================
+  # Encryption
+  # ============================================================================
+
+  age:
+    description: "Modern encryption tool (for secrets vault)"
+    macos: true
+    wsl: true
+    check: "age --version"
+    install:
+      brew: "age"
+      apt: "age"
+
+  # ============================================================================
+  # macOS Only
+  # ============================================================================
+
+  chatall:
+    description: "Multi-AI chat GUI"
+    macos: true
+    wsl:
+    check: "ls /Applications/ChatALL.app"
+    install:
+      brew_cask: "chatall"
+
+  iterm2:
+    description: "Terminal emulator"
+    macos: true
+    wsl:
+    check: "ls /Applications/iTerm.app"
+    install:
+      brew_cask: "iterm2"
+
+  wave:
+    description: "Terminal emulator"
+    macos: true
+    wsl:
+    check: "ls /Applications/Wave.app"
+    install:
+      brew_cask: "wave"

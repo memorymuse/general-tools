@@ -270,29 +270,14 @@ fi
 [[ -d "$HOME/go/bin" ]] && export PATH="$HOME/go/bin:$PATH"
 
 # ============================================================================
-# CC-Isolate Utilities
+# DevEnv - Environment Sync Tool
 # ============================================================================
 
-# Quick access to cc-isolate commands
-alias cc-status='cc-isolate status'
-alias cc-push='cc-isolate push'
-alias cc-pull='cc-isolate pull'
-alias cc-sync='cc-isolate sync'
+# Add devenv to PATH
+export PATH="$HOME/cc-projects/general-tools/env-sync/bin:$PATH"
 
-# Show current isolation status
-cc-info() {
-    echo "CC-Isolate Status:"
-    echo "  Platform: $CC_ISOLATE_PLATFORM"
-    echo "  Profile: ${CC_ISOLATE_PROFILE:-global}"
-    echo "  1Password: $(command -v op >/dev/null && echo 'installed' || echo 'not installed')"
-    if command -v op >/dev/null 2>&1; then
-        if op account get >/dev/null 2>&1; then
-            echo "  1Password Status: authenticated"
-        else
-            echo "  1Password Status: not authenticated"
-        fi
-    fi
-}
+# Source global secrets if deployed
+[[ -f ~/.env.secrets ]] && source ~/.env.secrets
 
 # ============================================================================
 # Source Additional Configuration
