@@ -94,48 +94,52 @@ export HISTSIZE=10000
 export HISTFILESIZE=20000
 export HISTCONTROL=ignoreboth:erasedups  # Ignore duplicates and spaces
 export HISTTIMEFORMAT="%Y-%m-%d %H:%M:%S  "  # Timestamp history entries
-shopt -s histappend  # Append to history, don't overwrite
 
-# Shell options
-shopt -s checkwinsize  # Update LINES and COLUMNS after each command
-shopt -s cdspell       # Autocorrect minor typos in cd
-shopt -s dirspell      # Autocorrect minor typos in directory completion
-shopt -s globstar 2>/dev/null  # Enable ** recursive globbing (bash 4+)
+# Bash-specific options (skip in zsh)
+if [[ -n "$BASH_VERSION" ]]; then
+    shopt -s histappend    # Append to history, don't overwrite
+    shopt -s checkwinsize  # Update LINES and COLUMNS after each command
+    shopt -s cdspell       # Autocorrect minor typos in cd
+    shopt -s dirspell      # Autocorrect minor typos in directory completion
+    shopt -s globstar 2>/dev/null  # Enable ** recursive globbing (bash 4+)
+fi
 
 # Make less more friendly for non-text files
 [[ -x /usr/bin/lesspipe ]] && eval "$(SHELL=/bin/sh lesspipe)"
 
 # ============================================================================
-# Prompt Configuration
+# Prompt Configuration (Bash only - zsh uses its own prompt system)
 # ============================================================================
 
-# Color definitions
-if [[ -t 1 ]]; then  # Only set colors for interactive terminals
-    export COLOR_RESET='\[\033[0m\]'
-    export COLOR_RED='\[\033[0;31m\]'
-    export COLOR_GREEN='\[\033[0;32m\]'
-    export COLOR_YELLOW='\[\033[0;33m\]'
-    export COLOR_BLUE='\[\033[0;34m\]'
-    export COLOR_PURPLE='\[\033[0;35m\]'
-    export COLOR_CYAN='\[\033[0;36m\]'
-    export COLOR_WHITE='\[\033[0;37m\]'
-    export COLOR_BOLD='\[\033[1m\]'
-fi
+if [[ -n "$BASH_VERSION" ]]; then
+    # Color definitions for bash
+    if [[ -t 1 ]]; then  # Only set colors for interactive terminals
+        export COLOR_RESET='\[\033[0m\]'
+        export COLOR_RED='\[\033[0;31m\]'
+        export COLOR_GREEN='\[\033[0;32m\]'
+        export COLOR_YELLOW='\[\033[0;33m\]'
+        export COLOR_BLUE='\[\033[0;34m\]'
+        export COLOR_PURPLE='\[\033[0;35m\]'
+        export COLOR_CYAN='\[\033[0;36m\]'
+        export COLOR_WHITE='\[\033[0;37m\]'
+        export COLOR_BOLD='\[\033[1m\]'
+    fi
 
-# Simple, informative prompt
-# Format: user@host:~/path (git-branch) $
-if [[ "${CC_ISOLATE_PROMPT_ENABLED:-true}" == "true" ]]; then
-    # Function to get git branch
-    __cc_git_branch() {
-        local branch
-        branch=$(git symbolic-ref --short HEAD 2>/dev/null)
-        if [[ -n "$branch" ]]; then
-            echo " ${COLOR_PURPLE}(${branch})${COLOR_RESET}"
-        fi
-    }
+    # Simple, informative prompt
+    # Format: user@host:~/path (git-branch) $
+    if [[ "${CC_ISOLATE_PROMPT_ENABLED:-true}" == "true" ]]; then
+        # Function to get git branch
+        __cc_git_branch() {
+            local branch
+            branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+            if [[ -n "$branch" ]]; then
+                echo " ${COLOR_PURPLE}(${branch})${COLOR_RESET}"
+            fi
+        }
 
-    # Set prompt
-    PS1="${COLOR_GREEN}\u@\h${COLOR_RESET}:${COLOR_BLUE}\w${COLOR_RESET}\$(__cc_git_branch)${COLOR_RESET}\$ "
+        # Set prompt
+        PS1="${COLOR_GREEN}\u@\h${COLOR_RESET}:${COLOR_BLUE}\w${COLOR_RESET}\$(__cc_git_branch)${COLOR_RESET}\$ "
+    fi
 fi
 
 # ============================================================================

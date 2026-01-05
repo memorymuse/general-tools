@@ -1396,8 +1396,10 @@ cmd_push() {
         if ! secrets_encrypt --auto; then
             die "Failed to encrypt secrets"
         fi
-    else
+    elif [[ -f "$SECRETS_ENCRYPTED" ]]; then
         log_info "Step 1/4: Secrets already encrypted"
+    else
+        log_info "Step 1/4: No secrets vault"
     fi
 
     # 2. Check for any changes
