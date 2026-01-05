@@ -1440,7 +1440,16 @@ cmd_push() {
 
     # 4. Stage, commit, push (all automatic)
     log_info "Step 3/4: Committing..."
-    git add "$ENV_SYNC_ROOT/dotfiles/" "$ENV_SYNC_ROOT/profiles/" "$ENV_SYNC_ROOT/bashrc.d/" "$ENV_SYNC_ROOT/config.sh" "$ENV_SYNC_ROOT/tools.yaml" "$ENV_SYNC_ROOT/bin/" "$ENV_SYNC_ROOT/lib/" "$ENV_SYNC_ROOT/.gitignore" 2>/dev/null || true
+
+    # Stage all env-sync files (using absolute paths for reliability)
+    git add "$ENV_SYNC_ROOT/bin/" 2>/dev/null || true
+    git add "$ENV_SYNC_ROOT/lib/" 2>/dev/null || true
+    git add "$ENV_SYNC_ROOT/profiles/" 2>/dev/null || true
+    git add "$ENV_SYNC_ROOT/dotfiles/" 2>/dev/null || true
+    git add "$ENV_SYNC_ROOT/bashrc.d/" 2>/dev/null || true
+    git add "$ENV_SYNC_ROOT/tools.yaml" 2>/dev/null || true
+    git add "$ENV_SYNC_ROOT/config.sh" 2>/dev/null || true
+    git add "$ENV_SYNC_ROOT/.gitignore" 2>/dev/null || true
     [[ -f "$SECRETS_ENCRYPTED" ]] && git add "$SECRETS_ENCRYPTED"
 
     if git commit -m "$message"; then
