@@ -1376,6 +1376,100 @@ cmd_vault_pull() {
 }
 
 #------------------------------------------------------------------------------
+# Claude Code Config Sync
+#------------------------------------------------------------------------------
+
+# Files/directories to sync from ~/.claude/
+CLAUDE_SYNC_ITEMS=(
+    "CLAUDE.md"
+    "commands"
+    "skills"
+    "settings.json"
+    "output-styles"
+)
+
+# Sync ~/.claude/ -> dotfiles/claude/
+claude_sync_to_repo() {
+    local source_dir="$HOME/.claude"
+    local dest_dir="$ENV_SYNC_ROOT/../dotfiles/claude"
+
+    if [[ ! -d "$source_dir" ]]; then
+        log_info "No ~/.claude/ directory found"
+        return 0
+    fi
+
+    mkdir -p "$dest_dir"
+
+    local synced=0
+    for item in "${CLAUDE_SYNC_ITEMS[@]}"; do
+        local src="$source_dir/$item"
+        local dst="$dest_dir/$item"
+
+        if [[ -e "$src" ]]; then
+            if [[ -d "$src" ]]; then
+                # Directory - use rsync-like copy
+                rm -rf "$dst"
+                cp -R "$src" "$dst"
+            else
+                # File
+                cp "$src" "$dst"
+            fi
+            synced=$((synced + 1))
+        fi
+    done
+
+    if [[ $synced -gt 0 ]]; then
+        log_success "Synced $synced Claude Code config(s) to repo"
+    else
+        log_info "No Claude Code configs to sync"
+    fi
+
+    return 0
+}
+
+# Deploy dotfiles/claude/ -> ~/.claude/
+claude_deploy_from_repo() {
+    local source_dir="$ENV_SYNC_ROOT/../dotfiles/claude"
+    local dest_dir="$HOME/.claude"
+
+    if [[ ! -d "$source_dir" ]]; then
+        log_info "No Claude Code configs in repo"
+        return 0
+    fi
+
+    # Check if source has any content
+    if [[ -z "$(ls -A "$source_dir" 2>/dev/null)" ]]; then
+        log_info "Claude Code configs directory is empty"
+        return 0
+    fi
+
+    mkdir -p "$dest_dir"
+
+    local deployed=0
+    for item in "${CLAUDE_SYNC_ITEMS[@]}"; do
+        local src="$source_dir/$item"
+        local dst="$dest_dir/$item"
+
+        if [[ -e "$src" ]]; then
+            if [[ -d "$src" ]]; then
+                # Directory - merge (don't delete existing files not in source)
+                cp -R "$src/." "$dst/" 2>/dev/null || cp -R "$src" "$dst"
+            else
+                # File
+                cp "$src" "$dst"
+            fi
+            deployed=$((deployed + 1))
+        fi
+    done
+
+    if [[ $deployed -gt 0 ]]; then
+        log_success "Deployed $deployed Claude Code config(s)"
+    fi
+
+    return 0
+}
+
+#------------------------------------------------------------------------------
 # Unified Push/Pull (Everything)
 #------------------------------------------------------------------------------
 
@@ -1390,20 +1484,24 @@ cmd_push() {
 
     cd "$ENV_SYNC_ROOT"
 
-    # 1. Encrypt secrets if plaintext exists (one password prompt, then automatic)
+    # 1. Sync Claude Code configs from ~/.claude/ to repo
+    log_info "Step 1/5: Syncing Claude Code configs..."
+    claude_sync_to_repo
+
+    # 2. Encrypt secrets if plaintext exists (one password prompt, then automatic)
     if [[ -f "$SECRETS_YAML" ]]; then
-        log_info "Step 1/4: Encrypting secrets..."
+        log_info "Step 2/5: Encrypting secrets..."
         if ! secrets_encrypt --auto; then
             die "Failed to encrypt secrets"
         fi
     elif [[ -f "$SECRETS_ENCRYPTED" ]]; then
-        log_info "Step 1/4: Secrets already encrypted"
+        log_info "Step 2/5: Secrets already encrypted"
     else
-        log_info "Step 1/4: No secrets vault"
+        log_info "Step 2/5: No secrets vault"
     fi
 
-    # 2. Check for any changes
-    local changes=$(git status --porcelain "$ENV_SYNC_ROOT" 2>/dev/null | grep -v secrets.yaml.backup || true)
+    # 3. Check for any changes
+    local changes=$(git status --porcelain "$ENV_SYNC_ROOT" "$ENV_SYNC_ROOT/../dotfiles" 2>/dev/null | grep -v secrets.yaml.backup || true)
 
     if [[ -z "$changes" ]]; then
         echo
@@ -1412,11 +1510,11 @@ cmd_push() {
     fi
 
     echo
-    log_info "Step 2/4: Changes detected:"
+    log_info "Step 3/5: Changes detected:"
     echo "$changes" | sed 's/^/  /'
     echo
 
-    # 3. Secret scan on non-vault files (quick, silent unless issues)
+    # Secret scan on non-vault files (quick, silent unless issues)
     if [[ "$SECRET_SCAN_ENABLED" == "true" ]]; then
         local scan_failed=false
         while IFS= read -r line; do
@@ -1441,21 +1539,23 @@ cmd_push() {
     fi
 
     # 4. Stage, commit, push (all automatic)
-    log_info "Step 3/4: Committing..."
+    log_info "Step 4/5: Committing..."
 
     # Stage all env-sync files (using absolute paths for reliability)
     git add "$ENV_SYNC_ROOT/bin/" 2>/dev/null || true
     git add "$ENV_SYNC_ROOT/lib/" 2>/dev/null || true
     git add "$ENV_SYNC_ROOT/profiles/" 2>/dev/null || true
-    git add "$ENV_SYNC_ROOT/dotfiles/" 2>/dev/null || true
     git add "$ENV_SYNC_ROOT/bashrc.d/" 2>/dev/null || true
     git add "$ENV_SYNC_ROOT/tools.yaml" 2>/dev/null || true
     git add "$ENV_SYNC_ROOT/config.sh" 2>/dev/null || true
     git add "$ENV_SYNC_ROOT/.gitignore" 2>/dev/null || true
     [[ -f "$SECRETS_ENCRYPTED" ]] && git add "$SECRETS_ENCRYPTED"
 
+    # Stage dotfiles (parent directory)
+    git add "$ENV_SYNC_ROOT/../dotfiles/" 2>/dev/null || true
+
     if git commit -m "$message"; then
-        log_info "Step 4/4: Pushing to remote..."
+        log_info "Step 5/5: Pushing to remote..."
         if git push; then
             echo
             log_success "${BOLD}Environment synced!${RESET}"
@@ -1481,7 +1581,7 @@ cmd_pull() {
     # 1. Check for uncommitted changes - auto-stash
     local has_changes=false
     local stashed=false
-    for dir in dotfiles/ profiles/ bashrc.d/ config.sh tools.yaml; do
+    for dir in profiles/ bashrc.d/ config.sh tools.yaml ../dotfiles/; do
         if ! git diff-index --quiet HEAD -- "$dir" 2>/dev/null; then
             has_changes=true
             break
@@ -1489,15 +1589,15 @@ cmd_pull() {
     done
 
     if $has_changes; then
-        log_info "Step 1/4: Stashing local changes..."
+        log_info "Step 1/5: Stashing local changes..."
         git stash push -m "devenv: Auto-stash $(date +%Y-%m-%d\ %H:%M)"
         stashed=true
     else
-        log_info "Step 1/4: No local changes to stash"
+        log_info "Step 1/5: No local changes to stash"
     fi
 
     # 2. Pull with merge conflict detection
-    log_info "Step 2/4: Pulling from remote..."
+    log_info "Step 2/5: Pulling from remote..."
     local pull_output
     if ! pull_output=$(git pull 2>&1); then
         echo "$pull_output"
@@ -1528,15 +1628,20 @@ cmd_pull() {
     # 3. Deploy secrets (one password prompt, then automatic)
     if [[ -f "$SECRETS_ENCRYPTED" ]]; then
         echo
-        log_info "Step 3/4: Deploying secrets..."
+        log_info "Step 3/5: Deploying secrets..."
         secrets_deploy --auto
     else
-        log_info "Step 3/4: No secrets vault found"
+        log_info "Step 3/5: No secrets vault found"
     fi
 
-    # 4. Sync dotfiles and reload
+    # 4. Deploy Claude Code configs
     echo
-    log_info "Step 4/4: Syncing dotfiles..."
+    log_info "Step 4/5: Deploying Claude Code configs..."
+    claude_deploy_from_repo
+
+    # 5. Sync dotfiles and reload
+    echo
+    log_info "Step 5/5: Syncing dotfiles..."
     cmd_dotfiles_sync 2>/dev/null || true
 
     # Reload config

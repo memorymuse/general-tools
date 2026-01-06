@@ -1,721 +1,656 @@
-# cc-isolate 🛡️
+# devenv
 
-**Claude Code Isolation System** - Portable, cross-platform environment isolation for Claude Code with intelligent bashrc layering, dotfile synchronization, integrated secret scanning, and 1Password CLI integration for secure secret management.
-
----
-
-## 🚀 Quick Reference
-
-### Installation
-```bash
-cd env-sync
-./install.sh
-```
-
-### Essential Commands
-```bash
-# Mount isolation (activate CC environment)
-cc-isolate mount              # Use global profile
-cc-isolate mount my-project   # Use specific profile
-
-# Unmount isolation (deactivate)
-cc-isolate unmount
-
-# Check status
-cc-isolate status
-
-# Sync dotfiles locally (create symlinks)
-cc-isolate dotfiles sync
-
-# Git sync - Push/Pull to GitHub (with secret scanning!)
-cc-isolate dotfiles push      # Push dotfiles to GitHub
-cc-isolate sync pull          # Pull everything from GitHub
-cc-isolate sync status        # Check what needs to be pushed
-
-# Secret scanning
-cc-isolate secrets scan       # Scan for secrets
-cc-isolate secrets template   # Create template from file with secrets
-```
-
-### Activate in Current Shell
-```bash
-# One-time activation
-source /path/to/env-sync/.cc-env
-
-# Persistent activation (add to ~/.bashrc or ~/.bash_profile)
-export BASH_ENV=/path/to/env-sync/.cc-env
-```
-
-### 1Password Setup (Recommended)
-```bash
-# 1. Install 1Password desktop app from 1password.com/downloads
-# 2. Install CLI
-brew install --cask 1password-cli  # macOS
-# (See 1Password Integration section for Linux/WSL)
-
-# 3. Enable CLI integration in 1Password desktop app:
-#    Settings → Developer → Enable "Integrate with 1Password CLI"
-
-# 4. Verify
-op --version
-```
-
-### Common Workflows
-
-**First-time setup:**
-```bash
-cd env-sync && ./install.sh
-cc-isolate mount
-export BASH_ENV=$PWD/.cc-env
-
-# Optional: Install 1Password CLI for secret management
-# (See 1Password Setup above)
-```
-
-**Sync environment to new machine:**
-```bash
-git clone <repo-url>
-cd general-tools/env-sync
-./install.sh
-cc-isolate sync pull         # Pull and sync everything
-cc-isolate mount
-
-# Install 1Password CLI if using secrets
-# (See 1Password Setup above)
-```
-
-**Push changes to GitHub:**
-```bash
-# Edit your dotfiles
-vim ~/.gitconfig
-
-# Push just dotfiles
-cc-isolate dotfiles push "Update gitconfig"
-
-# Or push everything (dotfiles + profiles + config)
-cc-isolate sync push "Update environment"
-```
-
-**Create project-specific profile:**
-```bash
-cc-isolate profile create web-dev
-vim env-sync/profiles/web-dev/bashrc
-cc-isolate mount web-dev
-```
+**Cross-Machine Environment Synchronization** - Seamlessly sync your development environment between machines (macOS, WSL/Linux) with encrypted secrets, shell configurations, and tool management.
 
 ---
 
-## 📖 Table of Contents
+## Project Status & Vision
 
-- [Overview](#overview)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Mounting & Unmounting](#mounting--unmounting)
-  - [Profiles](#profiles)
-  - [Dotfile Management](#dotfile-management)
-  - [Git Synchronization](#git-synchronization)
-  - [Configuration](#configuration)
-- [Cross-Platform Support](#cross-platform-support)
-- [Secret Scanning & Protection](#secret-scanning--protection)
-- [1Password Integration](#1password-integration)
-- [Security & Isolation](#security--isolation)
-- [Advanced Usage](#advanced-usage)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
+**Current State**: This README documents the existing implementation - a working system for syncing secrets, shell configs, Claude Code settings, and tools between machines.
+
+**Expanded Vision**: The `docs/` directory contains planning for the next evolution of this tool:
+
+- [`docs/VISION.md`](docs/VISION.md) - User-perspective narrative of the full problem and desired experience
+- [`docs/PROBLEM-MODEL.md`](docs/PROBLEM-MODEL.md) - Comprehensive problem model for the expanded system
+
+**Key gaps between current and vision**:
+- **Auto-discovery**: Current system requires manual vault export; vision calls for automatic discovery of gitignored essentials across all projects
+- **Validation**: Vision includes user validation workflow for discovered files
+- **Conflict resolution**: Current system overwrites; vision includes smart conflict detection and resolution
+- **Completeness verification**: Vision requires verified capture of ALL Claude Code config, not just a static list
+
+The problem model is intended as the foundation for designing and implementing these expanded capabilities.
 
 ---
 
-## Overview
+## What This Does
 
-`cc-isolate` is a comprehensive environment isolation system designed specifically for Claude Code usage, with a focus on:
+`devenv` solves the "new machine problem" - when you switch between your MacBook and Desktop (or any machines), you want:
 
-1. **Safety**: Protects your system bashrc from accidental modifications
-2. **Portability**: Syncs seamlessly between macOS, Linux, and WSL via GitHub
-3. **Flexibility**: Supports global and project-specific environments
-4. **Layering**: Intelligently combines system bashrc with custom settings
-5. **Security**: Leverages OS-level file protection mechanisms
+- Same environment variables and secrets (API keys, tokens)
+- Same shell aliases and functions
+- Same CLI tools installed
+- Same dotfiles (.gitconfig, .vimrc, etc.)
 
-### Why cc-isolate?
-
-When running Claude Code with `dangerously-skip-permissions` mode (especially on macOS where it has broader system access), you need:
-
-- **Isolation boundaries** between CC's environment and your system
-- **Consistent dev environments** across multiple machines (desktop + laptop)
-- **Protection** for your system configuration files
-- **Easy synchronization** via GitHub
-- **Flexible customization** for different projects
-
-cc-isolate solves all of these problems elegantly.
+One command syncs everything: `devenv push` / `devenv pull`
 
 ---
 
-## Features
+## Quick Start
 
-### 🔒 Bashrc Isolation & Layering
-
-- **Dual-layer architecture**: System bashrc sources first, then custom CC bashrc
-- **Override priority**: Custom settings override system settings on conflicts
-- **Read-only protection**: Optional immutable flag on system bashrc (via `chattr` on Linux, `chflags` on macOS)
-- **No system file modification**: Your system bashrc stays pristine
-
-### 👥 Profile System
-
-- **Global profile**: Default environment for all CC sessions
-- **Project profiles**: Custom environments for specific projects/workflows
-- **Easy switching**: `cc-isolate mount <profile-name>`
-- **Isolated configurations**: Each profile has its own bashrc, aliases, environment variables
-
-### 📦 Dotfile Synchronization
-
-- **Configurable sync modes**:
-  - `list`: Sync specific dotfiles (e.g., `.gitconfig`, `.vimrc`)
-  - `all`: Sync all dotfiles in the repository
-  - `none`: Disable dotfile sync
-- **Symlink management**: Automatic symlinking between repo and home directory
-- **Conflict detection**: Warns about conflicts between repo and local files
-- **GitHub-based sync**: Commit and push changes to sync across machines
-
-### 🔐 Secret Scanning & Protection
-
-- **Automatic scanning**: Pre-push secret detection using GitLeaks (160+ patterns)
-- **100% local**: No API calls, no cloud services, all scanning happens on your machine
-- **Template generation**: Auto-creates template files with `YOUR_*_HERE` placeholders
-- **Blocked file types**: Prevents accidental commit of `.pem`, `.key`, `.env`, SSH keys, etc.
-- **Whitelist support**: Manage false positives easily
-- **Configurable**: Enable/disable, auto-install GitLeaks, auto-generate templates
-
-### 🔑 1Password CLI Integration
-
-- **Shell plugin support**: Automatic secret injection for git, aws, gh, and 60+ tools
-- **Biometric authentication**: Touch ID / Windows Hello integration via desktop app
-- **Zero code changes**: Works transparently with existing tools and workflows
-- **Template compatibility**: Templates define structure (git-synced), 1Password stores secrets
-- **.envrc compatible**: Works seamlessly with per-directory environment files
-- **Claude Code ready**: Automatically initialized in all CC bash sessions
-- **Cross-platform**: macOS, Linux, and WSL support
-
-### 🌍 Cross-Platform Support
-
-- **Linux**: Full support (native and WSL)
-- **macOS**: Full support
-- **WSL Ubuntu**: Full support with Windows integration
-- **Platform detection**: Automatic detection and adaptation
-- **Portable scripts**: Same commands work everywhere
-
-### 🔧 Advanced Features
-
-- **Mount/unmount**: Easy activation/deactivation of isolation
-- **Status monitoring**: Check current state, active profile, configuration
-- **BASH_ENV integration**: Automatic sourcing for CC sessions
-- **Safe defaults**: Interactive confirmations, command aliases
-- **Visual indicators**: `[CC]` prefix in prompt when isolated
-
----
-
-## Architecture
-
-### Directory Structure
-
-```
-env-sync/
-├── bin/
-│   └── cc-isolate              # Main command-line tool
-├── lib/
-│   ├── platform.sh             # Cross-platform compatibility layer
-│   └── secrets.sh              # Secret scanning library (GitLeaks integration)
-├── profiles/
-│   ├── global/
-│   │   └── bashrc              # Global CC bashrc with 1Password integration
-│   └── projects/
-│       └── example/
-│           └── bashrc          # Example project-specific bashrc
-├── dotfiles/
-│   ├── .gitconfig.example      # Example dotfiles for reference
-│   └── ...                     # Your synced dotfiles go here
-├── tests/
-│   ├── test-secrets.sh         # Secret scanning test suite
-│   └── cleanup.sh              # Test cleanup
-├── .gitleaks.toml              # GitLeaks configuration
-├── system-backup/
-│   └── bashrc.backup           # Backup of system bashrc
-├── .cc-env                     # Generated environment file (when mounted)
-├── .state                      # Current state tracking
-├── config.sh                   # Configuration file
-├── install.sh                  # Installation script
-├── uninstall.sh                # Uninstallation script
-└── README.md                   # This file
-```
-
-### How It Works
-
-1. **Mounting**: When you run `cc-isolate mount`:
-   - Backs up your system bashrc (if not already backed up)
-   - Optionally protects system bashrc with immutable flag
-   - Creates `.cc-env` file that sources:
-     - System bashrc (read-only)
-     - Profile-specific bashrc (your customizations)
-     - Additional snippets from `bashrc.d/`
-
-2. **Layering**: The `.cc-env` file sources files in this order:
-   ```bash
-   1. System bashrc (/home/user/.bashrc)
-   2. Profile bashrc (profiles/<profile>/bashrc)
-   3. Snippets (bashrc.d/*.sh)
-   ```
-   Later settings override earlier ones.
-
-3. **Activation**: Set `BASH_ENV` to point to `.cc-env`:
-   ```bash
-   export BASH_ENV=/path/to/env-sync/.cc-env
-   ```
-   Now all bash sessions (including CC) will source this environment.
-
-4. **Protection**: System bashrc is protected with:
-   - **Linux/WSL**: `chattr +i` (immutable flag)
-   - **macOS**: `chflags uchg` (user immutable flag)
-   - Result: File cannot be modified/deleted without removing the flag
-
----
-
-## Installation
-
-### Prerequisites
-
-- Bash 4.0 or later
-- Git
-- sudo access (for file protection features)
-
-### Install
+### First Machine (Setup)
 
 ```bash
-# Clone the repository (or pull latest changes)
+# 1. Clone the repo
 git clone <your-repo-url>
 cd general-tools/env-sync
 
-# Run installation
+# 2. Install
 ./install.sh
+
+# 3. Export your existing secrets
+devenv vault export ~ ~/projects
+
+# 4. Review and encrypt
+vim secrets.yaml          # Review/edit
+devenv vault encrypt      # Encrypts with password
+
+# 5. Push to git
+devenv push "Initial setup"
 ```
 
-The installer will:
-- Make `cc-isolate` executable
-- Create symlink in `/usr/local/bin` (if possible)
-- Create default configuration file
-- Set up global profile with safe defaults
-- Create example files and documentation
-
-### Verify Installation
+### Second Machine (Sync)
 
 ```bash
-cc-isolate --version
-cc-isolate status
+# 1. Clone and install
+git clone <your-repo-url>
+cd general-tools/env-sync
+./install.sh
+
+# 2. Pull everything
+devenv pull               # Enter password, secrets deployed automatically
+
+# 3. Install missing tools
+devenv tools install
 ```
 
 ---
 
-## Usage
+## Core Commands
 
-### Mounting & Unmounting
+### Unified Sync
 
-#### Mount Isolation
+| Command | Description |
+|---------|-------------|
+| `devenv push [message]` | Encrypt secrets + stage all changes + commit + push |
+| `devenv pull` | Pull from git + decrypt secrets + deploy to local files |
 
-Activate the CC isolated environment:
+These are the primary commands. One password prompt, then everything is automatic.
+
+### Secrets Vault
+
+| Command | Description |
+|---------|-------------|
+| `devenv vault init` | Create empty secrets.yaml template |
+| `devenv vault export [dirs...]` | Scan directories for .env files, merge into secrets.yaml |
+| `devenv vault encrypt` | Encrypt secrets.yaml → secrets.yaml.age (password-protected) |
+| `devenv vault decrypt` | Decrypt secrets.yaml.age → secrets.yaml |
+| `devenv vault deploy` | Deploy secrets to ~/.env.secrets and project .env files |
+| `devenv vault edit` | Decrypt → open in $EDITOR → re-encrypt on save |
+
+### Tools Management
+
+| Command | Description |
+|---------|-------------|
+| `devenv tools check` | Show installed/missing tools for current platform |
+| `devenv tools install` | Install all missing tools |
+| `devenv tools list` | List all tools in manifest with platform support |
+
+### Other Commands
+
+| Command | Description |
+|---------|-------------|
+| `devenv status` | Show current state, platform, configuration |
+| `devenv help` | Full command reference |
+
+---
+
+## How Secrets Work
+
+### The Flow
+
+```
+Your .env files  →  secrets.yaml  →  secrets.yaml.age  →  Git
+                    (plaintext)       (encrypted)
+
+On pull:
+Git  →  secrets.yaml.age  →  secrets.yaml  →  ~/.env.secrets + project .env files
+        (encrypted)           (decrypted)     (deployed)
+```
+
+### Encryption
+
+Uses [age](https://github.com/FiloSottile/age) with password-based encryption:
+- Strong encryption (ChaCha20-Poly1305)
+- No key management - just remember your password
+- Standard `age -p` prompts for password on encrypt/decrypt
+
+### Secrets YAML Format
+
+```yaml
+global:
+  # Available everywhere via ~/.env.secrets
+  GITHUB_TOKEN: "ghp_xxxxxxxxxxxx"
+  VERCEL_TOKEN: "xxxxx"
+
+projects:
+  # Deployed to specific project directories
+  "~/projects/my-app":
+    DATABASE_URL: "postgres://user:pass@host:5432/db"
+    API_KEY: "sk-xxxxx"
+
+  "~/projects/another-app":
+    STRIPE_KEY: "sk_test_xxxxx"
+```
+
+### Deployment Locations
+
+| Type | Deployed To | How To Use |
+|------|-------------|------------|
+| Global | `~/.env.secrets` | `source ~/.env.secrets` in shell profile |
+| Project | `<project>/.env` | Loaded by most frameworks automatically |
+
+The global bashrc already sources `~/.env.secrets` if it exists.
+
+---
+
+## Claude Code Config Sync
+
+devenv automatically syncs your global Claude Code configuration between machines.
+
+### What Gets Synced
+
+| Item | Source | Destination |
+|------|--------|-------------|
+| `CLAUDE.md` | `~/.claude/CLAUDE.md` | `dotfiles/claude/CLAUDE.md` |
+| `commands/` | `~/.claude/commands/` | `dotfiles/claude/commands/` |
+| `skills/` | `~/.claude/skills/` | `dotfiles/claude/skills/` |
+| `settings.json` | `~/.claude/settings.json` | `dotfiles/claude/settings.json` |
+| `output-styles/` | `~/.claude/output-styles/` | `dotfiles/claude/output-styles/` |
+
+### What Does NOT Sync (machine-specific)
+
+- `history.jsonl` - Conversation history
+- `todos/`, `plans/`, `debug/` - Transient working data
+- `projects/` - Machine-specific project data
+- `file-history/`, `shell-snapshots/` - Local state
+- `statsig/`, `telemetry/` - Analytics
+
+### Push/Pull Flow
+
+**On push (`devenv push`):**
+1. Copies syncable items from `~/.claude/` → `dotfiles/claude/`
+2. Encrypts secrets
+3. Commits and pushes everything
+
+**On pull (`devenv pull`):**
+1. Pulls from git
+2. Deploys secrets
+3. Copies `dotfiles/claude/` → `~/.claude/`
+4. Syncs other dotfiles
+
+### Project-Level Claude Configs
+
+Project-level `.claude/` directories (inside each project) are NOT handled by devenv - they sync via each project's own git repository. devenv only handles the global `~/.claude/` directory.
+
+---
+
+## Tools Manifest
+
+The `tools.yaml` file defines required CLI tools with platform-specific install methods:
+
+```yaml
+tools:
+  claude:
+    description: "Claude Code CLI"
+    macos: true
+    wsl: true
+    check: "claude --version"
+    install:
+      npm: "@anthropic-ai/claude-code"
+
+  surreal:
+    description: "SurrealDB CLI"
+    macos: true
+    wsl: true
+    check: "surreal version"
+    install:
+      brew: "surrealdb/tap/surreal"
+      script: "curl -sSf https://install.surrealdb.com | sh"
+```
+
+Run `devenv tools check` to see what's missing, `devenv tools install` to install them.
+
+---
+
+## Shell Configuration
+
+### Global Bashrc
+
+Located at `profiles/global/bashrc`, this file is sourced for all shells and includes:
+
+- Platform detection (macOS, Linux, WSL)
+- PATH configuration (Homebrew, cargo, go, etc.)
+- History settings
+- Common aliases (ls, grep, git shortcuts)
+- Useful functions (mkcd, extract, etc.)
+- Sources `~/.env.secrets` if present
+
+### Zsh Compatibility
+
+The bashrc is compatible with both bash and zsh. Add to your `~/.zshrc`:
 
 ```bash
-# Use global profile
-cc-isolate mount
-
-# Use specific profile
-cc-isolate mount my-project
+source ~/path/to/env-sync/profiles/global/bashrc
 ```
 
-This creates `.cc-env` and optionally protects your system bashrc.
+### Project Profiles
 
-#### Activate in Current Shell
-
-To use the isolated environment in your current shell:
+Create project-specific profiles for different workflows:
 
 ```bash
-source /path/to/env-sync/.cc-env
-```
-
-#### Activate for Claude Code
-
-To make Claude Code automatically use the isolated environment:
-
-```bash
-# Set BASH_ENV to point to .cc-env
-export BASH_ENV=/path/to/env-sync/.cc-env
-
-# Add to your shell profile for persistence
-echo 'export BASH_ENV=/path/to/env-sync/.cc-env' >> ~/.bashrc
-```
-
-Now all bash sessions (including those started by Claude Code) will use the isolated environment.
-
-#### Unmount Isolation
-
-Deactivate the isolation:
-
-```bash
-cc-isolate unmount
-```
-
-This removes `.cc-env` and unprotects the system bashrc.
-
-Don't forget to unset `BASH_ENV`:
-
-```bash
-unset BASH_ENV
-# Remove from ~/.bashrc if you added it there
-```
-
-### Profiles
-
-Profiles allow you to maintain different environments for different use cases.
-
-#### List Profiles
-
-```bash
-cc-isolate profile list
-```
-
-Output:
-```
-Available Profiles:
-
-● global (active)
-  web-dev
-  data-science
-  projects/my-app
-```
-
-#### Create a New Profile
-
-```bash
-cc-isolate profile create web-dev
-```
-
-This creates `profiles/web-dev/bashrc` with a template. Edit it:
-
-```bash
+devenv profile create web-dev
 vim profiles/web-dev/bashrc
+devenv mount web-dev
 ```
 
-Example customizations:
+---
 
-```bash
-# Web development profile
+## Directory Structure
 
-# Node.js environment
-export NODE_ENV=development
-export PATH="$HOME/.nvm/versions/node/v18.0.0/bin:$PATH"
+devenv uses two directories that work together:
 
-# Aliases
-alias dev='npm run dev'
-alias build='npm run build'
-alias test='npm test'
-
-# Custom prompt
-PS1='\[\033[01;32m\][WEB]\[\033[00m\] \[\033[01;34m\]\w\[\033[00m\]\$ '
+```
+general-tools/
+├── dotfiles/                   # Storage - all syncable configs
+│   ├── claude/                 # Claude Code configs (synced to ~/.claude/)
+│   │   ├── CLAUDE.md           # Global agent instructions
+│   │   ├── commands/           # Custom slash commands
+│   │   ├── skills/             # User-level skills
+│   │   ├── settings.json       # Claude Code preferences
+│   │   └── output-styles/      # Custom output styles
+│   ├── bashrc                  # Shell configuration
+│   ├── env-templates/          # Environment variable templates
+│   └── setup.sh                # One-time setup script
+│
+└── env-sync/                   # Mechanism - sync tooling
+    ├── bin/
+    │   ├── cc-isolate          # Main CLI
+    │   └── devenv -> cc-isolate
+    ├── lib/
+    │   ├── platform.sh         # Platform detection
+    │   ├── secrets.sh          # GitLeaks secret scanning
+    │   └── secrets-sync.sh     # Age encryption library
+    ├── profiles/
+    │   └── global/
+    │       └── bashrc          # Global shell config
+    ├── tools.yaml              # Tools manifest
+    ├── secrets.yaml.age        # Encrypted secrets
+    └── config.sh               # Configuration
 ```
 
-#### Switch Profiles
-
-```bash
-cc-isolate mount web-dev
-```
-
-#### Delete a Profile
-
-```bash
-cc-isolate profile delete web-dev
-```
-
-### Dotfile Management
-
-Manage your dotfiles across machines.
-
-#### Configure Sync Mode
-
-Edit `config.sh`:
-
-```bash
-# Sync specific files
-DOTFILE_SYNC_MODE="list"
-DOTFILES_TO_SYNC=".gitconfig .vimrc .tmux.conf .zshrc"
-
-# Or sync everything in dotfiles/
-DOTFILE_SYNC_MODE="all"
-
-# Or disable sync
-DOTFILE_SYNC_MODE="none"
-```
-
-#### Sync Dotfiles
-
-```bash
-cc-isolate dotfiles sync
-```
-
-This will:
-- Import dotfiles from `~` to `dotfiles/` if they don't exist in repo
-- Create symlinks from `~` to `dotfiles/` for dotfiles in repo
-- Detect conflicts and warn you
-
-#### List Managed Dotfiles
-
-```bash
-cc-isolate dotfiles list
-```
-
-Output:
-```
-Managed Dotfiles:
-
-  ● .gitconfig (linked)
-  ● .vimrc (linked)
-  ○ .tmux.conf (not linked)
-  ○ .bashrc (conflict)
-```
-
-#### Workflow for Syncing Across Machines
-
-**On Machine 1 (initial setup):**
-```bash
-# Configure which dotfiles to sync
-vim config.sh
-
-# Sync dotfiles locally (creates symlinks)
-cc-isolate dotfiles sync
-
-# Push to GitHub
-cc-isolate dotfiles push "Initial dotfiles"
-```
-
-**On Machine 2 (new machine):**
-```bash
-# Pull from GitHub
-cc-isolate dotfiles pull
-
-# Or pull everything (dotfiles + profiles + config)
-cc-isolate sync pull
-```
-
-Your dotfiles are now synced! Changes on either machine can be pushed/pulled with cc-isolate commands.
-
-### Git Synchronization
-
-cc-isolate includes integrated Git commands for seamless synchronization across machines. All sync commands operate on the **same exact files** (dotfiles/, profiles/, bashrc.d/, config.sh) to ensure consistency.
-
-#### Push Dotfiles Only
-
-```bash
-# Edit a dotfile (changes auto-save to repo via symlinks)
-vim ~/.gitconfig
-
-# Push just dotfiles to GitHub
-cc-isolate dotfiles push
-cc-isolate dotfiles push "Update gitconfig"
-```
-
-This commits and pushes only files in `dotfiles/`.
-
-#### Pull Dotfiles Only
-
-```bash
-# Pull and re-sync dotfiles from GitHub
-cc-isolate dotfiles pull
-```
-
-This pulls changes and automatically re-creates symlinks.
-
-#### Push Everything
-
-```bash
-# Edit profile or config
-vim profiles/global/bashrc
-vim config.sh
-
-# Push all changes (dotfiles + profiles + config)
-cc-isolate sync push
-cc-isolate sync push "Update environment settings"
-```
-
-This commits and pushes changes in:
-- `dotfiles/`
-- `profiles/`
-- `bashrc.d/`
-- `config.sh`
-
-#### Pull Everything
-
-```bash
-# Pull all changes from GitHub
-cc-isolate sync pull
-```
-
-This pulls and automatically:
-- Re-syncs dotfiles (creates symlinks)
-- Reloads configuration
-- Suggests remounting if currently mounted
-
-#### Check Sync Status
-
-```bash
-# See what needs to be pushed
-cc-isolate sync status
-```
-
-Output:
-```
-Git Repository Status:
-
-  Branch:         main
-  Remote:         https://github.com/user/repo.git
-  Last commit:    abc1234 - Update gitconfig (2 hours ago)
-
-Pending Changes:
-
-  M  dotfiles/.gitconfig
-  M  profiles/global/bashrc
-  ?  dotfiles/.vimrc
-
-ℹ To push changes: cc-isolate sync push
-```
-
-#### Conflict Handling
-
-If you have uncommitted changes when pulling, cc-isolate will:
-1. Warn you about uncommitted changes
-2. Offer to stash them automatically
-3. Pull the changes
-4. You can restore stashed changes with `git stash pop`
-
-```bash
-$ cc-isolate sync pull
-⚠ You have uncommitted changes
-Stash changes and pull? [y/N] y
-ℹ Stashing changes...
-✓ Changes stashed
-ℹ Pulling from remote...
-✓ Pulled from remote
-```
-
-#### Complete Workflow Between Machines
-
-**Machine 1 (edit and push):**
-```bash
-# Make changes
-vim ~/.gitconfig
-vim profiles/global/bashrc
-
-# Check status
-cc-isolate sync status
-
-# Push to GitHub
-cc-isolate sync push "Update config and profile"
-```
-
-**Machine 2 (pull and apply):**
-```bash
-# Pull changes
-cc-isolate sync pull
-
-# If mounted, remount to apply changes
-cc-isolate unmount
-cc-isolate mount
-```
-
-### Configuration
-
-#### View Current Configuration
-
-```bash
-cc-isolate config
-```
-
-#### Edit Configuration
-
-```bash
-vim config.sh
-```
-
-#### Configuration Options
-
-```bash
-# System bashrc location (auto-detected by default)
-SYSTEM_BASHRC="$HOME/.bashrc"
-
-# Protect system bashrc with immutable flag when mounted
-PROTECT_SYSTEM_BASHRC=true
-
-# Dotfile sync mode: "all", "list", or "none"
-DOTFILE_SYNC_MODE="list"
-
-# List of dotfiles to sync (only used when DOTFILE_SYNC_MODE="list")
-DOTFILES_TO_SYNC=".gitconfig .vimrc .tmux.conf"
-```
+### What Gets Synced via Git
+
+| Path | Description |
+|------|-------------|
+| `dotfiles/claude/` | Claude Code configs (CLAUDE.md, commands/, skills/, settings.json) |
+| `dotfiles/bashrc` | Shell configuration |
+| `env-sync/profiles/` | Shell profiles |
+| `env-sync/tools.yaml` | Tools manifest |
+| `env-sync/secrets.yaml.age` | Encrypted secrets |
+| `env-sync/config.sh` | Configuration |
+
+### What Stays Local (gitignored)
+
+| Path | Description |
+|------|-------------|
+| `secrets.yaml` | Plaintext secrets (deleted after encrypt) |
+| `.state` | Mount state |
+| `.cc-env` | Generated environment file |
+| `~/.claude/history.jsonl` | Conversation history |
+| `~/.claude/todos/`, `plans/`, `debug/` | Transient data |
 
 ---
 
 ## Cross-Platform Support
 
-### Platform-Specific Behavior
-
-| Feature | Linux | macOS | WSL |
-|---------|-------|-------|-----|
-| File protection | `chattr +i` | `chflags uchg` | `chattr +i` |
-| System bashrc | `~/.bashrc` | `~/.bash_profile` or `~/.bashrc` | `~/.bashrc` |
-| Symlinks | Full support | Full support | Full support |
-| Auto-detection | ✓ | ✓ | ✓ (detects WSL) |
-
 ### Platform Detection
 
-The system automatically detects your platform and adapts:
+The system auto-detects:
+- **macOS** - Apple Silicon and Intel
+- **Linux** - Native Linux
+- **WSL** - Windows Subsystem for Linux
 
-```bash
-# Check detected platform
-cc-isolate status
-```
+### Platform-Specific Behavior
 
-Output includes:
-```
-Platform: WSL (Windows Subsystem for Linux)
-```
+| Feature | macOS | Linux/WSL |
+|---------|-------|-----------|
+| Package manager | Homebrew | apt-get + Homebrew |
+| File protection | `chflags uchg` | `chattr +i` |
+| Default shell | zsh | bash |
 
-### WSL-Specific Features
+### Tools Installation
 
-- Detects WSL environment automatically
-- Works with WSL Ubuntu, Debian, etc.
-- Isolates CC from Windows system (better security boundary)
-
-### macOS-Specific Considerations
-
-- On macOS, the system "bashrc" may be `~/.bash_profile`
-- `chflags uchg` provides file protection
-- Works with both Intel and Apple Silicon Macs
+Tools manifest specifies install methods per platform:
+- `brew:` - Homebrew (macOS primary, Linux fallback)
+- `apt:` - apt-get (Linux/WSL)
+- `npm:` - npm global install
+- `script:` - Custom install script
 
 ---
 
-## Secret Scanning & Protection
+## Workflow Examples
 
-cc-isolate includes **integrated secret scanning** to prevent accidental leakage of sensitive information to GitHub. This is critical when syncing dotfiles that may contain API keys, tokens, or credentials.
+### Daily Workflow
+
+```bash
+# On MacBook - end of day
+devenv push "Updated API keys"
+
+# On Desktop - start of day
+devenv pull
+```
+
+### Adding New Secrets
+
+```bash
+# Edit secrets
+devenv vault edit
+
+# Add your new secrets, save and close
+# Automatically re-encrypts
+
+# Push to sync
+devenv push "Added Stripe keys"
+```
+
+### New Tool Needed
+
+```bash
+# Add to tools.yaml
+vim tools.yaml
+
+# Install it
+devenv tools install
+
+# Push for other machines
+devenv push "Added new-tool"
+```
+
+### Setting Up a New Machine
+
+```bash
+# Clone repo
+git clone <repo> && cd general-tools/env-sync
+
+# Install devenv
+./install.sh
+
+# Pull everything
+devenv pull
+
+# Install tools
+devenv tools install
+
+# Verify
+devenv status
+devenv tools check
+```
+
+---
+
+## Configuration
+
+Edit `config.sh` for customization:
+
+```bash
+# Protect system bashrc with immutable flag when mounted
+PROTECT_SYSTEM_BASHRC=true
+
+# Dotfile sync mode: "all", "list", or "none"
+DOTFILE_SYNC_MODE="list"
+DOTFILES_TO_SYNC=".gitconfig .vimrc"
+
+# Secret scanning (uses GitLeaks)
+SECRET_SCAN_ENABLED=true
+SECRET_BLOCK_PUSH=true
+```
+
+---
+
+## Security
+
+### Secrets
+
+- **Encryption**: age (ChaCha20-Poly1305) with password
+- **Plaintext secrets.yaml**: Deleted after encryption
+- **Deployed files**: `chmod 600` (owner read/write only)
+- **Git tracking**: Only encrypted `.age` file is tracked
+
+### Secret Scanning
+
+Pre-push scanning uses GitLeaks to detect:
+- API keys (AWS, GitHub, Stripe, etc.)
+- Private keys (RSA, SSH, PGP)
+- Database connection strings
+- JWT tokens
+- 160+ secret patterns
+
+If secrets are detected in non-vault files, push is blocked.
+
+### Best Practices
+
+1. **Never commit secrets.yaml** - Only the encrypted .age file
+2. **Use strong passwords** - The password protects all your secrets
+3. **Same password on all machines** - Or you can't decrypt
+4. **Review before push** - Check `devenv sync status`
+
+---
+
+## Troubleshooting
+
+### "age: command not found"
+
+```bash
+# macOS
+brew install age
+
+# Linux/WSL
+sudo apt install age
+```
+
+### "Decryption failed"
+
+Wrong password. The password must match what was used to encrypt.
+
+### "No secrets file found"
+
+Run `devenv vault export ~` to scan for .env files, or `devenv vault init` for empty template.
+
+### Git push fails
+
+Check `devenv sync status` for uncommitted changes. Ensure you have push access to the remote.
+
+### Tools install fails
+
+Some tools require manual installation. Check the `install:` section in tools.yaml for alternatives.
+
+---
+
+## Command Reference
+
+```
+devenv <command> [options]
+
+SYNC:
+  push [msg]              Push EVERYTHING (configs + secrets) to git
+  pull                    Pull EVERYTHING from git and deploy
+
+VAULT:
+  vault init              Create empty secrets.yaml template
+  vault export [dirs...]  Export env files to secrets.yaml
+  vault encrypt           Encrypt secrets.yaml -> secrets.yaml.age
+  vault decrypt           Decrypt secrets.yaml.age -> secrets.yaml
+  vault deploy            Deploy secrets to ~/.env.secrets and project .env
+  vault edit              Edit secrets (decrypt -> editor -> re-encrypt)
+
+TOOLS:
+  tools check             Check which tools are installed/missing
+  tools install           Install missing tools for current platform
+  tools list              List all tools in manifest
+
+PROFILES:
+  mount [profile]         Mount isolation (default: global)
+  unmount                 Unmount isolation
+  profile list            List available profiles
+  profile create <name>   Create a new profile
+  profile delete <name>   Delete a profile
+
+DOTFILES:
+  dotfiles sync           Sync dotfiles locally (create symlinks)
+  dotfiles list           List managed dotfiles
+  dotfiles push [msg]     Commit and push dotfiles to GitHub
+  dotfiles pull           Pull dotfiles from GitHub and re-sync
+
+OTHER:
+  status                  Show isolation status
+  config                  Show current configuration
+  help                    Show this help message
+  version                 Show version
+```
+
+---
+
+## Files Reference
+
+| File | Purpose |
+|------|---------|
+| `secrets.yaml` | Plaintext secrets (temporary, deleted after encrypt) |
+| `secrets.yaml.age` | Encrypted secrets (git-tracked) |
+| `~/.env.secrets` | Deployed global secrets |
+| `<project>/.env` | Deployed project secrets |
+| `tools.yaml` | Tools manifest |
+| `profiles/global/bashrc` | Global shell configuration |
+| `config.sh` | devenv configuration |
+
+---
+
+## Secret Scanning (GitLeaks)
+
+Pre-push scanning detects secrets before they reach git. This uses [GitLeaks](https://github.com/gitleaks/gitleaks), an open-source secret scanner with 160+ patterns.
 
 ### How It Works
 
-**Automatic Scanning**: Every push command (`dotfiles push` and `sync push`) automatically scans files for secrets **before** committing.
+Every `devenv push` and `devenv dotfiles push` automatically scans files before committing:
 
-**GitLeaks Integration**: Uses [GitLeaks](https://github.com/gitleaks/gitleaks), the industry-standard open-source secret scanner with 160+ built-in secret patterns.
+```bash
+$ devenv dotfiles push "Update config"
+ℹ Scanning for secrets...
+  ✓ dotfiles/.gitconfig
+  ✓ dotfiles/.vimrc
+  ✗ dotfiles/.npmrc (secrets detected)
 
-**Template Generation**: When secrets are detected, cc-isolate can automatically create template files with secrets replaced by placeholders.
+✗ Push blocked due to detected secrets
+```
 
-**Local-Only**: All scanning happens **100% locally** - no API calls, no cloud services, no data leaves your machine.
+### What Gets Detected
 
-### Installation
+**Built-in patterns (160+):**
+- AWS keys and secrets
+- GitHub tokens (classic, PAT, OAuth)
+- Private keys (RSA, SSH, PGP)
+- Database connection strings
+- API keys (Slack, Stripe, Twilio, etc.)
+- JWT tokens
+- NPM tokens
+- Docker registry auth
 
-Install GitLeaks for secret scanning to work:
+**Blocked file types:**
+- `.pem`, `.key`, `.p12`, `.pfx` (certificates)
+- `.env*` files (use vault instead)
+- `id_rsa`, `id_dsa`, `id_ecdsa` (SSH keys)
+- `credentials`, `credentials.json`
+
+### Manual Scanning
+
+```bash
+# Scan specific directory
+devenv secrets scan dotfiles
+
+# Scan specific file
+devenv secrets scan dotfiles/.gitconfig
+
+# Check for template placeholders that need values
+devenv secrets check dotfiles
+```
+
+### Template Generation
+
+When secrets are detected, templates can be auto-created:
+
+```bash
+# Original: dotfiles/.gitconfig
+[github]
+    token = ghp_abc123xyz789...
+
+# Generated: dotfiles/.gitconfig.template
+[github]
+    token = YOUR_GITHUB_TOKEN_HERE
+```
+
+Create templates manually:
+
+```bash
+devenv secrets template dotfiles/.npmrc
+```
+
+### Whitelist False Positives
+
+```bash
+# Whitelist a file
+devenv secrets whitelist dotfiles/.gitconfig
+
+# View whitelist
+devenv secrets whitelist
+```
+
+### Configuration
+
+In `config.sh`:
+
+```bash
+# Enable secret scanning (default: true)
+SECRET_SCAN_ENABLED=true
+
+# Block push when secrets detected (default: true)
+SECRET_BLOCK_PUSH=true
+
+# Auto-create templates when secrets found
+SECRET_CREATE_TEMPLATES=true
+
+# Auto-install gitleaks if missing
+SECRET_SCAN_AUTO_INSTALL=true
+```
+
+### Bypass Scanning
+
+```bash
+# Skip scan for this push (DANGEROUS)
+devenv dotfiles push --no-scan "message"
+devenv sync push --no-scan "message"
+```
+
+### Installing GitLeaks
 
 ```bash
 # macOS
@@ -728,241 +663,30 @@ go install github.com/gitleaks/gitleaks/v8@latest
 # https://github.com/gitleaks/gitleaks/releases
 ```
 
-cc-isolate can auto-install via Homebrew or Go if `SECRET_SCAN_AUTO_INSTALL=true`.
-
-### Template Placeholders
-
-Secrets are replaced with the pattern: `YOUR_<SECRET_NAME>_HERE`
-
-**Examples:**
-- `YOUR_API_KEY_HERE`
-- `YOUR_AWS_ACCESS_KEY_ID_HERE`
-- `YOUR_DATABASE_PASSWORD_HERE`
-- `YOUR_GITHUB_TOKEN_HERE`
-
-This pattern makes it easy to:
-1. Identify template files that need values filled in
-2. Scan for unconverted placeholders: `cc-isolate secrets check`
-3. Search across systems: `grep -r "YOUR_.*_HERE"`
-
-### Usage Examples
-
-#### Scan Before Push
-
-```bash
-# Scan specific directory
-cc-isolate secrets scan dotfiles
-
-# Scan specific file
-cc-isolate secrets scan dotfiles/.gitconfig
-```
-
-#### Auto-Scan During Push
-
-```bash
-# This automatically scans before pushing
-cc-isolate dotfiles push "Update config"
-
-# If secrets found:
-# ✗ dotfiles/.gitconfig (secrets detected)
-#
-# Options:
-#   1. Remove secrets from files
-#   2. Use template files (*.template)
-#   3. Whitelist false positives
-#   4. Skip scan (DANGEROUS)
-#
-# ✗ Push blocked due to detected secrets
-```
-
-#### Template Generation
-
-When secrets are detected, templates are auto-created:
-
-```bash
-# Original file: dotfiles/.gitconfig
-[github]
-    token = ghp_abc123xyz789...
-
-# Auto-generated: dotfiles/.gitconfig.template
-[github]
-    token = YOUR_GITHUB_TOKEN_HERE
-```
-
-**Workflow:**
-1. Add original to `.gitignore`
-2. Commit template instead
-3. On new machine, copy template and fill in values
-
-Manual template creation:
-
-```bash
-cc-isolate secrets template dotfiles/.npmrc
-# Creates dotfiles/.npmrc.template
-```
-
-#### Whitelist False Positives
-
-Sometimes legitimate values trigger detection:
-
-```bash
-# Whitelist a file
-cc-isolate secrets whitelist dotfiles/.gitconfig
-
-# View whitelist
-cc-isolate secrets whitelist
-```
-
-#### Check for Unconverted Placeholders
-
-Ensure you've replaced all `YOUR_*_HERE` values:
-
-```bash
-cc-isolate secrets check dotfiles
-
-# Or check everything
-cc-isolate secrets check .
-```
-
-### What Gets Detected
-
-**Built-in patterns (160+):**
-- AWS keys and secrets
-- GitHub tokens (classic, PAT, OAuth)
-- Private keys (RSA, SSH, PGP)
-- Database connection strings
-- API keys (Slack, Stripe, etc.)
-- JWT tokens
-- Docker registry auth
-- NPM tokens
-- Shell exports with secrets
-
-**Blocked file types:**
-- `.pem`, `.key`, `.p12`, `.pfx` (certificates)
-- `.env*` files (environment variables)
-- `id_rsa`, `id_dsa`, `id_ecdsa` (SSH keys)
-- `credentials`, `credentials.json` (cloud credentials)
-
-See `.gitleaks.toml` for full configuration.
-
-### Configuration
-
-In `config.sh`:
-
-```bash
-# Enable secret scanning (RECOMMENDED)
-SECRET_SCAN_ENABLED=true
-
-# Block push when secrets detected (RECOMMENDED)
-SECRET_BLOCK_PUSH=true
-
-# Auto-create templates
-SECRET_CREATE_TEMPLATES=true
-
-# Auto-install gitleaks if missing
-SECRET_SCAN_AUTO_INSTALL=true
-```
-
-### Bypass Scanning (Use Carefully!)
-
-```bash
-# Skip scan for this push (DANGEROUS)
-cc-isolate dotfiles push --no-scan "message"
-cc-isolate sync push --no-scan "message"
-```
-
-⚠️ **Warning**: Only use `--no-scan` if you're absolutely certain the files are safe.
-
-### Best Practices
-
-1. **Whitelist-Only Dotfiles**: Only sync files that never contain secrets:
-   ```bash
-   DOTFILES_TO_SYNC=".bash_aliases .inputrc .editorconfig"
-   ```
-
-2. **Use Templates**: For configs that need secrets, use template files:
-   ```bash
-   # Commit: .gitconfig.template (with placeholders)
-   # Keep local: .gitconfig (with real values)
-   # .gitignore: .gitconfig
-   ```
-
-3. **Environment Variables**: Store secrets in `.env.local` (gitignored):
-   ```bash
-   # profiles/global/bashrc
-   if [[ -f "$HOME/.env.local" ]]; then
-       source "$HOME/.env.local"
-   fi
-   ```
-
-4. **Cloud Secret Managers**: For sensitive production use:
-   - [1Password CLI](https://developer.1password.com/docs/cli/)
-   - [Bitwarden CLI](https://bitwarden.com/help/cli/)
-   - [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/)
-   - [HashiCorp Vault](https://www.vaultproject.io/)
-
-5. **Regular Scans**: Periodically scan everything:
-   ```bash
-   cc-isolate secrets scan .
-   ```
-
-### Troubleshooting
-
-**"GitLeaks not found"**
-```bash
-# Install via Homebrew
-brew install gitleaks
-
-# Or disable scanning
-SECRET_SCAN_ENABLED=false  # in config.sh
-```
-
-**False positives**
-```bash
-# Whitelist the file
-cc-isolate secrets whitelist path/to/file
-```
-
-**Push blocked unexpectedly**
-```bash
-# See what was detected
-cc-isolate secrets scan dotfiles
-
-# If false positive, whitelist
-# If real secret, remove or use template
-```
-
 ---
 
 ## 1Password Integration
 
-cc-isolate includes seamless integration with 1Password CLI for secure secret management. This is the **recommended approach** for handling secrets in your dotfiles and scripts.
+The global bashrc includes optional 1Password CLI integration for seamless secret injection into CLI tools.
 
 ### Why 1Password?
 
-**Templates for Structure, 1Password for Secrets**
+**Templates for Structure, 1Password for Secrets:**
 - Templates (with `YOUR_*_HERE` placeholders) define configuration structure → synced via git
 - 1Password stores actual secret values → never touch git
 - Shell plugin provides secrets at runtime → transparent to tools
 
 **Benefits:**
-- ✅ Secrets never stored in files or environment variables
-- ✅ Works seamlessly with existing tools (git, aws, gh, etc.)
-- ✅ Biometric authentication (Touch ID, Windows Hello)
-- ✅ Secrets available across all your machines
-- ✅ Compatible with .envrc inheritance pattern
-- ✅ Zero changes to existing workflows
+- Secrets never stored in files or environment variables
+- Works seamlessly with existing tools (git, aws, gh, etc.)
+- Biometric authentication (Touch ID, Windows Hello)
+- Zero changes to existing workflows
 
 ### Installation
 
 #### 1. Install 1Password Desktop App
 
 Download from [1password.com/downloads](https://1password.com/downloads)
-
-**Supported platforms:**
-- macOS (Intel & Apple Silicon)
-- Windows (with WSL support)
-- Linux
 
 #### 2. Install 1Password CLI
 
@@ -973,7 +697,6 @@ brew install --cask 1password-cli
 
 **Linux/WSL:**
 ```bash
-# Download and install
 curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
   sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
 
@@ -983,79 +706,50 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1pass
 sudo apt update && sudo apt install 1password-cli
 ```
 
-**Verify installation:**
-```bash
-op --version
-```
-
-#### 3. Enable CLI Integration in Desktop App
+#### 3. Enable CLI Integration
 
 1. Open 1Password desktop app
 2. Go to **Settings → Developer**
 3. Enable **"Integrate with 1Password CLI"**
 4. Enable **"Connect with 1Password CLI"** (for biometric unlock)
 
-#### 4. Configure cc-isolate
+### How It Works
 
-The global bashrc automatically initializes 1Password when available.
+The global bashrc (`profiles/global/bashrc`) automatically initializes 1Password when available:
 
-**Optional configuration** in `config.sh`:
 ```bash
-# Enable/disable 1Password integration
-CC_ISOLATE_1PASSWORD_ENABLED=true
-
-# Auto-signin when session expires (not needed with desktop app)
-CC_ISOLATE_1PASSWORD_AUTO_SIGNIN=false
-
-# Default account (leave empty to use default)
-CC_ISOLATE_1PASSWORD_ACCOUNT=""
+if command -v op >/dev/null 2>&1; then
+    if [[ "${CC_ISOLATE_1PASSWORD_ENABLED:-true}" == "true" ]]; then
+        eval "$(op plugin run -- --init bash)"
+    fi
+fi
 ```
+
+**Shell plugin auto-injects secrets for 60+ tools:**
+- Git (GitHub, GitLab, Bitbucket tokens)
+- AWS CLI (access keys)
+- GitHub CLI (gh)
+- Docker (registry auth)
+- SSH (key passphrases)
+- Terraform, kubectl, and more
 
 ### Usage
 
-#### Shell Plugin (Recommended)
-
-The shell plugin automatically injects secrets when tools run.
-
-**How it works:**
+**Automatic (via shell plugin):**
 ```bash
-# 1Password initialized automatically when shell starts
-# (via profiles/global/bashrc)
-
-# Tools authenticate automatically - no code changes needed!
+# Tools authenticate automatically
 git push                  # 1Password provides GitHub token
 aws s3 ls                # 1Password provides AWS credentials
 gh api user              # 1Password provides GitHub token
 ```
 
-**Supported tools:**
-- Git (GitHub, GitLab, Bitbucket tokens)
-- AWS CLI (access keys, session tokens)
-- GitHub CLI (gh)
-- Docker (registry authentication)
-- SSH (SSH key passphrases)
-- Terraform (cloud provider credentials)
-- And 60+ more...
-
-See [full list of supported tools](https://developer.1password.com/docs/cli/shell-plugins/supported-tools/)
-
-#### Manual Secret Injection
-
-**Read secrets directly:**
+**Manual secret injection:**
 ```bash
-# In your bashrc or scripts
+# Read secrets directly
 export API_KEY="$(op read 'op://Private/MyApp/api_key')"
-export DB_PASSWORD="$(op read 'op://Private/Database/password')"
-```
 
-**Inject into command:**
-```bash
-# One-off commands
-op run -- myapp
-# Secrets from .env referenced as op:// URIs are injected
-
+# Inject into command
 op run --env-file=.env -- npm start
-# All environment variables with op:// references resolved
 ```
 
 **Template syntax in .env:**
@@ -1063,376 +757,114 @@ op run --env-file=.env -- npm start
 # .env (gitignored)
 API_KEY="op://Private/MyApp/api_key"
 DB_URL="op://Private/Database/connection_string"
-GITHUB_TOKEN="op://Private/GitHub/personal_access_token"
 ```
 
-### Integration with .envrc
+### Configuration
 
-If you use per-directory `.envrc` files (with parent inheritance), 1Password works seamlessly:
-
-**Root .envrc** (e.g., `~/projects/.envrc`):
-```bash
-# Initialize 1Password (inherits to all child directories)
-eval "$(op plugin run -- --init bash)"
-```
-
-**Project .envrc** (e.g., `~/projects/myapp/.envrc`):
-```bash
-# Inherits 1Password from parent
-# Add project-specific variables
-export PROJECT_NAME="myapp"
-export NODE_ENV="development"
-```
-
-**Key points:**
-- 1Password initialized once at root level
-- All subdirectories inherit the plugin
-- Works automatically with Claude Code
-- No global environment pollution
-
-### Claude Code Compatibility
-
-**Does Claude Code inherit 1Password initialization?**
-
-Yes, with the cc-isolate global bashrc configuration. Here's how:
-
-1. **Global bashrc initializes 1Password:**
-   ```bash
-   # profiles/global/bashrc (auto-sourced by cc-isolate)
-   if command -v op >/dev/null 2>&1; then
-       eval "$(op plugin run -- --init bash)"
-   fi
-   ```
-
-2. **Claude Code launches with cc-isolate environment:**
-   ```bash
-   # In your shell startup or per-directory .envrc
-   export BASH_ENV=/path/to/env-sync/.cc-env
-   ```
-
-3. **Every Claude Code bash session:**
-   - Sources global bashrc
-   - Initializes 1Password plugin
-   - Tools auto-authenticate
-   - Works with your .envrc inheritance pattern
-
-**Workflow:**
-```bash
-# Directory structure
-~/projects/
-  .envrc                    # (Optional) Initialize 1Password at root
-  myapp/
-    .envrc                  # Inherits from parent, adds project vars
-
-# Launch Claude Code
-cd ~/projects/myapp
-claude-code .
-
-# Claude Code bash sessions automatically have:
-# ✓ 1Password plugin initialized
-# ✓ Parent .envrc loaded
-# ✓ Project .envrc loaded
-# ✓ Tools auto-authenticate
-```
-
-### Common Workflows
-
-#### Setting Up Git Authentication
-
-**1. Add GitHub token to 1Password:**
-- Create item in 1Password: "GitHub Personal Access Token"
-- Add field: `token` with your PAT value
-
-**2. Configure git to use 1Password:**
-```bash
-# Let shell plugin handle it automatically
-git config --global credential.helper ""
-
-# Or configure explicitly
-git config --global credential.helper "!gh auth git-credential"
-```
-
-**3. Push to GitHub:**
-```bash
-git push
-# 1Password prompts for biometric authentication
-# Token automatically injected
-# Push succeeds
-```
-
-#### Setting Up AWS Credentials
-
-**1. Store credentials in 1Password:**
-- Create item: "AWS Credentials"
-- Fields: `access_key_id`, `secret_access_key`
-
-**2. Reference in AWS config:**
-```bash
-# ~/.aws/config (safe to sync)
-[profile myprofile]
-region = us-east-1
-
-# Don't create ~/.aws/credentials - use 1Password instead
-```
-
-**3. Use AWS CLI:**
-```bash
-# Export via 1Password
-export AWS_ACCESS_KEY_ID="$(op read 'op://Private/AWS/access_key_id')"
-export AWS_SECRET_ACCESS_KEY="$(op read 'op://Private/AWS/secret_access_key')"
-
-aws s3 ls
-# Authenticates with 1Password-provided credentials
-```
-
-**Or use shell plugin:**
-```bash
-# With shell plugin, tools auto-detect and use 1Password
-aws s3 ls
-# 1Password provides credentials automatically
-```
-
-#### Managing Multiple Secrets
-
-**Create .env template** (synced via git):
-```bash
-# .env.template
-DATABASE_URL="YOUR_DATABASE_URL_HERE"
-API_KEY="YOUR_API_KEY_HERE"
-STRIPE_SECRET="YOUR_STRIPE_SECRET_HERE"
-```
-
-**Create .env with 1Password references** (gitignored):
-```bash
-# .env (never commit!)
-DATABASE_URL="op://Private/MyApp/database_url"
-API_KEY="op://Private/MyApp/api_key"
-STRIPE_SECRET="op://Private/Stripe/secret_key"
-```
-
-**Run app with secret injection:**
-```bash
-op run --env-file=.env -- npm start
-# All op:// references resolved at runtime
-```
-
-### Configuration Reference
-
-#### Environment Variables
-
-Set in `config.sh` or per-project `.envrc`:
+In `config.sh` or your shell profile:
 
 ```bash
 # Enable/disable 1Password integration
 CC_ISOLATE_1PASSWORD_ENABLED=true
 
-# Auto-signin (not needed with desktop app integration)
+# Auto-signin when session expires
 CC_ISOLATE_1PASSWORD_AUTO_SIGNIN=false
 
 # Default account
-CC_ISOLATE_1PASSWORD_ACCOUNT="my-team.1password.com"
-
-# 1Password CLI settings (optional)
-OP_ACCOUNT="my-team.1password.com"
-OP_SESSION_my_team=""  # Auto-managed by desktop app
-```
-
-#### Global Bashrc Customization
-
-To customize 1Password initialization, edit `profiles/global/bashrc`:
-
-```bash
-# Disable auto-initialization
-CC_ISOLATE_1PASSWORD_ENABLED=false
-
-# Or customize initialization
-if command -v op >/dev/null 2>&1; then
-    # Custom setup
-    eval "$(op plugin run -- --init bash)"
-
-    # Set default account
-    export OP_ACCOUNT="my-team.1password.com"
-fi
+CC_ISOLATE_1PASSWORD_ACCOUNT=""
 ```
 
 ### Troubleshooting
 
-#### "op: command not found"
+**"op: command not found"** - Install 1Password CLI (see above)
 
-**Solution:**
-```bash
-# Install 1Password CLI
-brew install --cask 1password-cli  # macOS
+**"not signed in"** - Enable desktop app integration or run `eval "$(op signin)"`
 
-# Or download from:
-# https://developer.1password.com/docs/cli/get-started/
-```
+**"Shell plugin not working"** - Re-initialize: `eval "$(op plugin run -- --init bash)"`
 
-#### "not signed in" errors
-
-**Solution 1: Enable desktop app integration**
-1. Open 1Password desktop app
-2. Settings → Developer
-3. Enable "Integrate with 1Password CLI"
-
-**Solution 2: Sign in manually**
-```bash
-eval "$(op signin)"
-# Follow biometric authentication prompt
-```
-
-#### "Shell plugin not working"
-
-**Verify initialization:**
-```bash
-# Check if plugin initialized
-echo $OP_PLUGIN_HOME
-# Should output a path like: ~/.op/plugins
-
-# Re-initialize manually
-eval "$(op plugin run -- --init bash)"
-```
-
-#### "Biometric unlock not working"
-
-**Requirements:**
-- 1Password desktop app installed and running
-- CLI integration enabled in desktop app settings
-- Desktop app unlocked at least once
-
-**WSL specific:**
-- Requires 1Password for Windows (not Linux version)
-- Enable WSL integration in Windows app settings
-
-#### "Works in terminal but not in Claude Code"
-
-**Check BASH_ENV:**
-```bash
-# Ensure cc-isolate environment is active
-echo $BASH_ENV
-# Should point to: /path/to/env-sync/.cc-env
-
-# If not set, add to your shell startup:
-export BASH_ENV=/path/to/env-sync/.cc-env
-```
-
-**Verify in Claude Code:**
-```bash
-# In Claude Code bash session
-command -v op
-# Should show: /path/to/op
-
-echo $OP_PLUGIN_HOME
-# Should show plugin directory
-```
-
-### Best Practices
-
-1. **Templates for Structure:**
-   - Commit `.env.template` files with `YOUR_*_HERE` placeholders
-   - Store actual `.env` files with `op://` references (gitignored)
-
-2. **Desktop App Integration:**
-   - Use desktop app for authentication (more secure than auto-signin)
-   - Enables biometric unlock
-   - Syncs across all your devices
-
-3. **Shell Plugin for CLI Tools:**
-   - Preferred over manual `op read` for standard tools
-   - Zero code changes required
-   - Automatically works with git, aws, gh, etc.
-
-4. **Per-Directory .envrc:**
-   - Initialize 1Password at root project directory
-   - Child directories inherit automatically
-   - Minimal global scope exposure
-
-5. **Audit Secret Access:**
-   ```bash
-   # View recent secret access
-   op item list --recent
-
-   # Check which tools accessed secrets
-   op activity list
-   ```
-
-### Security Considerations
-
-**Session Management:**
-- Desktop app integration: Sessions managed by desktop app
-- Standalone: 30-minute timeout (configurable)
-- Biometric unlock required after timeout
-
-**Credential Storage:**
-- **macOS**: Credentials in macOS Keychain
-- **Windows**: Encrypted with Windows DPAPI
-- **Linux/WSL**: Encrypted with device-specific keys
-
-**Network:**
-- Syncs encrypted vault from 1Password servers
-- Local cache encrypted at rest
-- No plaintext secrets on disk
-
-**Access Control:**
-- Device authorization required
-- Multi-factor authentication supported
-- Audit logs for secret access
-
-### Additional Resources
+### Resources
 
 - [1Password CLI Documentation](https://developer.1password.com/docs/cli/)
 - [Shell Plugins Guide](https://developer.1password.com/docs/cli/shell-plugins/)
 - [Supported Tools List](https://developer.1password.com/docs/cli/shell-plugins/supported-tools/)
-- [Security Model](https://1password.com/security/)
 
 ---
 
-## Security & Isolation
+## Isolation System (Mount/Unmount)
 
-### Isolation Layers
+The mount system provides isolated bash environments for Claude Code sessions with protection against accidental system file modifications.
 
-1. **Filesystem Isolation**:
-   - Claude Code Sandbox mode restricts filesystem access
-   - cc-isolate adds logical separation of system vs CC environment
+### Why Isolation?
 
-2. **Bashrc Protection**:
-   - System bashrc made immutable during mount
-   - Prevents accidental modifications by CC or user
-   - Unmount to regain write access
+When running Claude Code with `dangerously-skip-permissions`, you want:
+- **Protection** for system bashrc from accidental modifications
+- **Consistent environments** across machines
+- **Visual indicators** when in isolated mode
+- **Easy switching** between project contexts
 
-3. **Environment Separation**:
-   - CC sessions use `.cc-env` instead of system bashrc
-   - Clear visual indicator (`[CC]` in prompt)
-   - `CC_ISOLATE_ACTIVE` environment variable set
+### How It Works
 
-### Security Best Practices
-
-1. **Always use CC Sandbox mode** when possible
-2. **Run WSL for maximum isolation** on Windows (dedicated Linux environment)
-3. **Enable system bashrc protection** (`PROTECT_SYSTEM_BASHRC=true`)
-4. **Review profile bashrc** before mounting
-5. **Use project-specific profiles** for different security contexts
-6. **Regularly audit** your isolation setup:
-   ```bash
-   cc-isolate status
+1. **Mounting** creates a layered environment:
+   ```
+   System bashrc (read-only)
+      ↓
+   Profile bashrc (your customizations)
+      ↓
+   Snippets from bashrc.d/
    ```
 
-### Threat Model
+2. **Protection** (optional) makes system bashrc immutable:
+   - Linux: `chattr +i`
+   - macOS: `chflags uchg`
 
-cc-isolate protects against:
+3. **BASH_ENV** points Claude Code to use the isolated environment
 
-- ✅ Accidental modification of system bashrc by CC
-- ✅ Configuration drift between machines
-- ✅ Confusion between system and CC environments
-- ✅ Mistakes when running `dangerously-skip-permissions`
+### Commands
 
-cc-isolate does NOT protect against:
+```bash
+# Mount with global profile
+devenv mount
 
-- ❌ Malicious code execution (use CC Sandbox mode for this)
-- ❌ Network-based attacks (use CC network isolation)
-- ❌ Root-level compromises
+# Mount with specific profile
+devenv mount web-dev
 
-**Important**: cc-isolate is a convenience and safety layer, not a security boundary. Always use Claude Code's built-in Sandbox mode for security isolation.
+# Check status
+devenv status
+
+# Unmount (removes protection)
+devenv unmount
+```
+
+### Activating for Claude Code
+
+```bash
+# Set BASH_ENV for all Claude Code sessions
+export BASH_ENV=$HOME/cc-projects/general-tools/env-sync/.cc-env
+
+# Add to ~/.bashrc or ~/.zshrc for persistence
+```
+
+### Profile Management
+
+```bash
+# List profiles
+devenv profile list
+
+# Create new profile
+devenv profile create web-dev
+
+# Delete profile
+devenv profile delete web-dev
+```
+
+### Configuration
+
+```bash
+# In config.sh
+PROTECT_SYSTEM_BASHRC=true   # Enable immutable flag
+CC_ISOLATE_PROMPT_ENABLED=true  # Show [CC] in prompt
+CC_ISOLATE_SHOW_WELCOME=false   # Show welcome message
+```
 
 ---
 
@@ -1440,312 +872,133 @@ cc-isolate does NOT protect against:
 
 ### Custom Bashrc Snippets
 
-Add reusable bash snippets to `bashrc.d/`:
+Add reusable snippets to `bashrc.d/`:
 
 ```bash
-# Create a snippet for Docker aliases
-cat > bashrc.d/docker.sh << 'EOF'
-#!/usr/bin/env bash
-# Docker aliases
-
+# bashrc.d/docker.sh
 alias dps='docker ps'
 alias dimg='docker images'
 alias dexec='docker exec -it'
-alias dlog='docker logs -f'
-EOF
 ```
 
 These are automatically sourced when isolation is mounted.
 
-### Project-Specific Profiles
-
-Create profiles under `profiles/projects/`:
-
-```bash
-mkdir -p profiles/projects/my-web-app
-cat > profiles/projects/my-web-app/bashrc << 'EOF'
-#!/usr/bin/env bash
-# My Web App Profile
-
-export PROJECT_ROOT="$HOME/projects/my-web-app"
-export NODE_ENV=development
-
-alias serve='cd $PROJECT_ROOT && npm start'
-alias deploy='cd $PROJECT_ROOT && ./deploy.sh'
-
-# Auto-cd to project
-cd "$PROJECT_ROOT" 2>/dev/null || true
-EOF
-
-cc-isolate mount projects/my-web-app
-```
-
-### Conditional Configuration
-
-Use platform detection in your bashrc:
+### Conditional Platform Configuration
 
 ```bash
 # In profiles/global/bashrc
-
-# Source platform library
-source /path/to/env-sync/lib/platform.sh
-
-if is_macos; then
-    # macOS-specific settings
+if [[ "$CC_ISOLATE_PLATFORM" == "macos" ]]; then
     export HOMEBREW_PREFIX="/opt/homebrew"
     export PATH="$HOMEBREW_PREFIX/bin:$PATH"
-elif is_wsl; then
-    # WSL-specific settings
-    export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0
-elif is_linux; then
-    # Native Linux settings
-    export PATH="/snap/bin:$PATH"
+elif [[ "$CC_ISOLATE_PLATFORM" == "wsl" ]]; then
+    export BROWSER="/mnt/c/Windows/explorer.exe"
 fi
 ```
 
-### Multiple Machine Profiles
-
-Create machine-specific profiles:
+### Machine-Specific Profiles
 
 ```bash
 # Desktop profile (powerful machine)
-cc-isolate profile create desktop
+devenv profile create desktop
 cat > profiles/desktop/bashrc << 'EOF'
 export PARALLEL_JOBS=16
 export DOCKER_MEMORY=8G
 EOF
 
 # Laptop profile (resource-constrained)
-cc-isolate profile create laptop
+devenv profile create laptop
 cat > profiles/laptop/bashrc << 'EOF'
 export PARALLEL_JOBS=4
 export DOCKER_MEMORY=2G
 EOF
+
+# Mount appropriate profile per machine
+devenv mount desktop  # On desktop
+devenv mount laptop   # On laptop
 ```
 
-On each machine, mount the appropriate profile:
+### Claude Code Hooks Integration
 
-```bash
-# On desktop
-cc-isolate mount desktop
+Auto-mount on session start:
 
-# On laptop
-cc-isolate mount laptop
-```
-
-### Integration with Claude Code Hooks
-
-Create a Claude Code session-start hook to auto-mount:
-
-```bash
-# In your Claude Code hooks configuration
+```yaml
+# In Claude Code hooks configuration
 session-start:
-  - /path/to/env-sync/bin/cc-isolate mount global
+  - /path/to/env-sync/bin/devenv mount global
 ```
 
 ---
 
-## Troubleshooting
+## Security & Isolation
 
-### Common Issues
+### Security Layers
 
-#### "Permission denied" when protecting system bashrc
+1. **Age Encryption**: Secrets encrypted with ChaCha20-Poly1305
+2. **GitLeaks Scanning**: Pre-push secret detection
+3. **File Protection**: Immutable flags on system files
+4. **Permission Control**: Deployed secrets are `chmod 600`
 
-**Cause**: Need sudo for `chattr`/`chflags`
+### Threat Model
 
-**Solution**:
-```bash
-# You'll be prompted for sudo password
-cc-isolate mount
-```
+**devenv protects against:**
+- ✅ Accidental secret commits to git
+- ✅ Accidental modification of system bashrc
+- ✅ Configuration drift between machines
+- ✅ Plaintext secrets in dotfiles
 
-Or disable protection:
-```bash
-# In config.sh
-PROTECT_SYSTEM_BASHRC=false
-```
+**devenv does NOT protect against:**
+- ❌ Malicious code execution (use Claude Code Sandbox)
+- ❌ Stolen encryption password
+- ❌ Root-level compromises
+- ❌ Memory-based attacks
 
-#### Changes to bashrc not taking effect
-
-**Cause**: Shell not sourcing `.cc-env`
-
-**Solution**:
-```bash
-# Manually source
-source /path/to/env-sync/.cc-env
-
-# Or set BASH_ENV
-export BASH_ENV=/path/to/env-sync/.cc-env
-```
-
-#### "Already mounted" error
-
-**Cause**: Isolation already active
-
-**Solution**:
-```bash
-# Unmount first
-cc-isolate unmount
-
-# Then mount again
-cc-isolate mount
-```
-
-#### Dotfile conflicts
-
-**Cause**: File exists in both `~` and `dotfiles/`, not linked
-
-**Solution**:
-```bash
-# Manually resolve
-# Option 1: Keep home version
-mv ~/dotfiles/.gitconfig ~/.gitconfig.backup
-cc-isolate dotfiles sync
-
-# Option 2: Use repo version
-rm ~/.gitconfig
-cc-isolate dotfiles sync
-```
-
-#### Can't modify system bashrc after mounting
-
-**Cause**: Immutable flag is set (this is intentional!)
-
-**Solution**:
-```bash
-# Unmount to regain write access
-cc-isolate unmount
-
-# Now you can edit
-vim ~/.bashrc
-
-# Remount when done
-cc-isolate mount
-```
-
-### Debug Mode
-
-Run with `set -x` for verbose output:
-
-```bash
-bash -x $(which cc-isolate) status
-```
-
-### Check State
-
-```bash
-# View internal state
-cat /path/to/env-sync/.state
-
-# Check if BASH_ENV is set
-echo $BASH_ENV
-
-# Check if CC isolation is active
-echo $CC_ISOLATE_ACTIVE
-```
-
----
-
-## Uninstalling
-
-```bash
-cd env-sync
-
-# Unmount if currently mounted
-cc-isolate unmount
-
-# Run uninstaller
-./uninstall.sh
-
-# Remove the repository
-cd ..
-rm -rf general-tools/env-sync
-```
+**Important**: devenv is a convenience and safety layer, not a security boundary. Use Claude Code's built-in Sandbox mode for security isolation.
 
 ---
 
 ## FAQ
 
-### Q: Do I need to commit `.cc-env` to Git?
+### Do I need to commit `.cc-env`?
 
-**A**: No, it's generated locally. It's in `.gitignore`.
+No, it's generated locally and gitignored.
 
-### Q: Can I use this without Claude Code?
+### Can I use this without Claude Code?
 
-**A**: Yes! It's a general-purpose bash environment manager. Just source `.cc-env` in your shell.
+Yes. It's a general-purpose environment sync tool. Just source the bashrc in your shell.
 
-### Q: What if I use Zsh instead of Bash?
+### What if I use Zsh instead of Bash?
 
-**A**: This is designed for Bash. For Zsh, you'd need to adapt the scripts and use `.zshrc` instead of `.bashrc`.
-
-### Q: How do I sync environment variables between machines?
-
-**A**: Add them to your profile bashrc, commit, and push:
+The bashrc is zsh-compatible. Add to `~/.zshrc`:
 ```bash
-# In profiles/global/bashrc
-export MY_VAR=value
-
-# Commit and push
-git add profiles/global/bashrc
-git commit -m "Add MY_VAR"
-git push
+source ~/path/to/env-sync/profiles/global/bashrc
 ```
 
-### Q: Can I have different profiles on different machines?
+### How do I sync environment variables?
 
-**A**: Yes! The profile you mount is a local choice. Just mount different profiles on each machine.
+Add them to `profiles/global/bashrc`, then `devenv push`.
 
-### Q: What happens if I delete `.cc-env`?
+### Can I have different secrets on different machines?
 
-**A**: Just remount: `cc-isolate mount`. It will be regenerated.
+The vault is shared, but you can use project-specific secrets that only deploy if the project directory exists on that machine.
 
----
+### What happens if I forget my encryption password?
 
-## Contributing
+You cannot decrypt your secrets. Keep your password in a password manager.
 
-Contributions welcome! Please:
+### Is the encryption secure?
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test on Linux, macOS, and WSL if possible
-5. Submit a pull request
+Yes. Age uses ChaCha20-Poly1305, a modern authenticated encryption scheme. Password-based encryption uses scrypt for key derivation.
 
 ---
 
-## License
+## Dependencies
 
-MIT License - see LICENSE file for details
+Required:
+- **bash** 3.2+ (macOS default works)
+- **git**
+- **age** (auto-installed if missing)
 
----
-
-## Credits
-
-Created to solve the problem of portable, safe Claude Code environments across multiple machines.
-
-**Platforms tested:**
-- ✅ Ubuntu 22.04 (WSL)
-- ✅ Ubuntu 20.04 (native)
-- ✅ macOS 13 Ventura
-- ✅ macOS 14 Sonoma
-
----
-
-## Changelog
-
-### v1.0.0 (2025-11-14)
-
-- Initial release
-- Cross-platform support (Linux, macOS, WSL)
-- Profile system (global + project-specific)
-- Dotfile synchronization
-- Bashrc layering with system override
-- File protection via `chattr`/`chflags`
-- Mount/unmount functionality
-- Comprehensive documentation
-
----
-
-**Happy isolating! 🛡️**
-
-For issues or questions, please open an issue on GitHub.
+Optional:
+- **GitLeaks** - For secret scanning (auto-installed via brew/go)
+- **Homebrew** - For tool installation on macOS
+- **1Password CLI** - For shell plugin integration
