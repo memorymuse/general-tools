@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 import statistics
 
-from core.tokenizer import count_tokens
+from ..core.tokenizer import count_tokens
 
 
 @dataclass

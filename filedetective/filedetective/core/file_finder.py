@@ -53,12 +53,16 @@ class FileFinder:
     ) -> list[FileMatch]:
         """Find files matching pattern across priority directories.
 
-        Supports two matching modes:
+        Supports three matching modes:
         1. Filename-only (no '/' in pattern): Matches against filename only
            Example: "storage.py", "*.md", "*project*"
 
         2. Path-based (contains '/'): Matches against relative path from each search root
            Example: "cc-*/drafts/*.md", "*/memos/design/*.md"
+
+        3. Explicit directory prefix: If pattern starts with an existing directory path
+           (like ~/cc-projects/*pattern*), searches that directory directly
+           Example: "~/cc-projects/*SELF-REVIEW*" searches ~/cc-projects/
 
         Args:
             pattern: Filename or path pattern to search for.
@@ -85,6 +89,23 @@ class FileFinder:
                     content_search=content_search
                 )
                 matches.extend(dir_matches)
+            # Sort by date only (all same priority)
+            matches.sort(key=lambda m: -m.modified_date)
+            return matches
+
+        # Check if pattern contains an explicit directory prefix
+        # e.g., "~/cc-projects/*SELF-REVIEW*" -> search ~/cc-projects/ with pattern "*SELF-REVIEW*"
+        explicit_dir, filename_pattern = self._extract_explicit_directory(pattern)
+        if explicit_dir is not None:
+            dir_matches = self._search_directory(
+                explicit_dir,
+                filename_pattern,
+                priority=0,  # Explicit paths get highest priority
+                recursive=True,
+                exclude=set(),
+                content_search=content_search
+            )
+            matches.extend(dir_matches)
             # Sort by date only (all same priority)
             matches.sort(key=lambda m: -m.modified_date)
             return matches
@@ -213,6 +234,51 @@ class FileFinder:
             pass
 
         return matches
+
+    def _extract_explicit_directory(self, pattern: str) -> tuple[Optional[Path], str]:
+        """Extract explicit directory prefix from pattern if present.
+
+        Handles patterns like:
+        - "~/cc-projects/*SELF-REVIEW*" -> (Path(~/cc-projects), "*SELF-REVIEW*")
+        - "/Users/foo/bar/*test*" -> (Path(/Users/foo/bar), "*test*")
+        - "cc-*/drafts/*.md" -> (None, "cc-*/drafts/*.md")  # No explicit dir, relative pattern
+
+        The key insight: if the pattern starts with a path that resolves to
+        a real directory (after expanding ~), we extract it and use the
+        remaining pattern as the filename pattern.
+
+        Args:
+            pattern: The pattern to analyze
+
+        Returns:
+            Tuple of (directory_path, filename_pattern) if explicit dir found,
+            or (None, pattern) if no explicit directory
+        """
+        # Expand ~ in pattern
+        expanded = Path(pattern).expanduser()
+        pattern_str = str(expanded)
+
+        # Only consider patterns that look like absolute paths or start with ~
+        if not pattern.startswith('~') and not pattern.startswith('/'):
+            return None, pattern
+
+        # Walk the path from root to find the longest existing directory prefix
+        # e.g., ~/cc-projects/*SELF-REVIEW* -> find ~/cc-projects/ exists
+        parts = Path(pattern_str).parts
+        for i in range(len(parts), 0, -1):
+            candidate = Path(*parts[:i])
+            if candidate.exists() and candidate.is_dir():
+                # Found an existing directory prefix
+                remaining_parts = parts[i:]
+                if remaining_parts:
+                    # There's a filename pattern after the directory
+                    filename_pattern = str(Path(*remaining_parts))
+                    return candidate, filename_pattern
+                else:
+                    # The pattern IS a directory - search all files in it
+                    return candidate, "*"
+
+        return None, pattern
 
     def _should_skip(self, path: Path) -> bool:
         """Check if file should be skipped.

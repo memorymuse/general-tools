@@ -6,7 +6,7 @@ Uses pragmatic regex patterns for structure and dependency extraction.
 import re
 from typing import Optional, List, Tuple
 
-from analyzers.base_analyzer import BaseAnalyzer, FileStats
+from .base_analyzer import BaseAnalyzer, FileStats
 
 
 class JavaScriptAnalyzer(BaseAnalyzer):

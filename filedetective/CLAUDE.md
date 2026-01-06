@@ -192,8 +192,9 @@ filedetective/
 Configured in `config.yaml`:
 1. `~/projects/muse-v1/*` (highest)
 2. `~/projects/*` (excluding muse-v1, muse-v0)
-3. `~/.claude/*`
-4. `~/projects/muse-v0/*` (lowest)
+3. `~/cc-projects/*`
+4. `~/.claude/*`
+5. `~/projects/muse-v0/*` (lowest)
 
 ## Supported File Types
 
