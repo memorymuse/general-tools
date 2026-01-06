@@ -14,10 +14,10 @@ import sys
 import argparse
 from pathlib import Path
 
-from core.file_finder import FileFinder
-from core.file_analyzer import FileAnalyzer
-from core.history import HistoryFinder
-from utils.display import (
+from .core.file_finder import FileFinder
+from .core.file_analyzer import FileAnalyzer
+from .core.history import HistoryFinder
+from .utils.display import (
     display_single_file,
     display_multiple_files,
     display_search_results,
@@ -110,12 +110,29 @@ def handle_find(patterns: list[str], local: bool = False) -> int:
     Returns:
         Exit code
     """
+    from .core.file_finder import FileMatch
+
     finder = FileFinder()
     local_dir = Path.cwd() if local else None
 
     # Collect all matches from all patterns
     all_matches = []
     for pattern in patterns:
+        # First, check if this "pattern" is actually an existing file
+        # This handles shell expansion: `filedet find *SELF-REVIEW*` expands
+        # to `filedet find SELF-REVIEW-PROTOCOL-ANALYSIS.md` if that file exists
+        pattern_path = Path(pattern).expanduser()
+        if pattern_path.exists() and pattern_path.is_file():
+            # It's an existing file - return it directly
+            stat = pattern_path.stat()
+            all_matches.append(FileMatch(
+                path=str(pattern_path.resolve()),
+                priority=0,
+                modified_date=stat.st_mtime,
+                size=stat.st_size
+            ))
+            continue
+
         matches = finder.find_files(pattern, local_dir=local_dir)
         all_matches.extend(matches)
 
@@ -327,15 +344,15 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
         file_path = Path(file_pattern).expanduser()
 
         if file_path.exists():
-            # Direct path
-            resolved_files.append(str(file_path))
+            # Direct path (or shell-expanded path)
+            resolved_files.append(str(file_path.resolve()))
         else:
             # File doesn't exist locally - search for it
             # Detect if wildcards are present
             has_wildcard = '*' in file_pattern or '?' in file_pattern
 
             if has_wildcard:
-                # Use pattern as-is
+                # Use pattern as-is (finder will handle explicit directory prefixes)
                 search_pattern = file_pattern
             else:
                 # Wrap in wildcards for fuzzy matching
@@ -358,7 +375,7 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
                     f"Found {len(matches)} matches for \"{file_pattern}\".\n"
                     f"Showing most recent first. Provide full path or more specific name to analyze."
                 )
-                from utils.file_utils import format_date
+                from .utils.file_utils import format_date
                 for i, match in enumerate(matches[:10], 1):
                     print(f"  [{i}] {match.display_path}")
                     print(f"      Modified: {format_date(match.modified_date)}")

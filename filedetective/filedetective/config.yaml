@@ -16,11 +16,16 @@ search_directories:
       - muse-v0
 
   - priority: 3
+    path: ~/cc-projects
+    description: "CC projects"
+    recursive: true
+
+  - priority: 4
     path: ~/.claude
     description: "User configuration"
     recursive: true
 
-  - priority: 4
+  - priority: 5
     path: ~/projects/muse-v0
     description: "Legacy work (muse-v0)"
     recursive: true

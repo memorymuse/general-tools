@@ -9,9 +9,9 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
-from analyzers.base_analyzer import FileStats, AggregateStats
-from utils.file_utils import format_date
-from core.tokenizer import format_size
+from ..analyzers.base_analyzer import FileStats, AggregateStats
+from ..utils.file_utils import format_date
+from ..core.tokenizer import format_size
 
 
 console = Console()
@@ -128,8 +128,11 @@ def display_search_results(matches: List, query: Union[str, List[str]]) -> None:
         console.print("[dim]Searched directories:[/]")
         console.print("  1. ~/projects/muse-v1/*")
         console.print("  2. ~/projects/* (excluding muse-v1, muse-v0)")
-        console.print("  3. ~/.claude/*")
-        console.print("  4. ~/projects/muse-v0/*\n")
+        console.print("  3. ~/cc-projects/*")
+        console.print("  4. ~/.claude/*")
+        console.print("  5. ~/projects/muse-v0/*\n")
+        console.print("[dim]Tip: Use quotes around wildcards to prevent shell expansion:[/]")
+        console.print('[dim]  filedet find "*pattern*"  or  filedet find "~/path/*pattern*"[/]\n')
         return
 
     console.print(f"\n[bold]Found {len(matches)} matches for[/] [yellow]{query_display}[/]:\n")
@@ -246,7 +249,7 @@ def display_history_table(entries: List, base_dir: Path, show_git: bool = False,
         show_git: Whether to show git status column
         show_git_detail: Whether to show git detail (last commit) column
     """
-    from core.history import HistoryEntry  # Import here to avoid circular
+    from ..core.history import HistoryEntry  # Import here to avoid circular
 
     # Calculate available width for Path column dynamically
     # When git mode is active, drop Lines/Tokens columns to make room

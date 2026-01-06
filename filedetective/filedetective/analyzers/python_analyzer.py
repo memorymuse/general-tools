@@ -5,7 +5,7 @@ Adapted from muse-codebase-mapper.py PythonAnalyzer class.
 import ast
 from typing import Any, Dict, Optional
 
-from analyzers.base_analyzer import BaseAnalyzer, FileStats
+from .base_analyzer import BaseAnalyzer, FileStats
 
 
 class PythonAnalyzer(BaseAnalyzer):

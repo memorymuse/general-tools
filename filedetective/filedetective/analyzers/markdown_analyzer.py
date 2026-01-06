@@ -2,7 +2,7 @@
 import re
 import statistics
 
-from analyzers.base_analyzer import BaseAnalyzer, FileStats
+from .base_analyzer import BaseAnalyzer, FileStats
 
 
 class MarkdownAnalyzer(BaseAnalyzer):

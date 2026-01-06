@@ -89,12 +89,21 @@ filedet "claude-mds/*/drafts/project*.md"     # Multi-level wildcards
 filedet ~/.claude/CLAUDE.md "streams/*/CLAUDE.md"
 ```
 
+**Explicit directory patterns** (search outside configured directories):
+```bash
+# Specify an explicit directory to search - works even if not in config
+filedet find "~/cc-projects/*SELF-REVIEW*"    # Searches ~/cc-projects/ directly
+filedet find "/tmp/myproject/*test*"          # Any absolute path works
+```
+
 **How it works:**
 - **Case-insensitive matching** - `CLAUDE.md` and `claude.md` are equivalent
 - No extension or wildcard → Wraps in wildcards: `*pattern*`
 - Contains `/` → Matches against full path from search roots
+- Starts with `~/` or `/` with existing directory → Searches that directory directly
 - Single match → Analyzes immediately
 - Multiple matches → Shows all (sorted by recency) and asks you to refine
+- **Shell-expanded files** → If shell expands `*pattern*` to existing files, returns them directly
 
 **Implementation**: Path-based matching detects `/` in pattern, then matches against relative paths from each search root using `fnmatch`. Automatically tries multiple depth prefixes (`pattern`, `*/pattern`, `*/*/pattern`) to handle deeply nested files without requiring exact depth specification. This eliminates the need to count directory levels in glob patterns.
 
@@ -121,8 +130,9 @@ filedet find docs/*ARCH*.md docs/*VISION*.md docs/*SYSTEM*.md
 Files are searched in priority order:
 1. `~/projects/muse-v1/*` (highest priority)
 2. `~/projects/*` (excluding muse-v1, muse-v0)
-3. `~/.claude/*`
-4. `~/projects/muse-v0/*` (lowest priority)
+3. `~/cc-projects/*`
+4. `~/.claude/*`
+5. `~/projects/muse-v0/*` (lowest priority)
 
 ### Search Contents
 
@@ -298,6 +308,21 @@ Remember:
 - **Shell wildcards** may expand first: Use quotes to pass patterns to filedet
 - **Relative paths**: Patterns are matched from each configured search root
 
+### Shell says "no matches found"
+
+If you see an error like:
+```
+(eval):1: no matches found: /Users/you/path/*pattern*
+```
+
+This is your shell (zsh/bash) trying to expand the glob **before** filedet runs. The shell finds no matches and fails. Fix: **quote the pattern**:
+```bash
+filedet find "~/cc-projects/*SELF-REVIEW*"   # Correct - quotes prevent shell expansion
+filedet find ~/cc-projects/*SELF-REVIEW*     # Wrong - shell tries to expand first
+```
+
+Note: If shell expansion *does* find files (e.g., `*test*` matches `test.py` in current dir), filedet will detect these are existing files and return them directly.
+
 ## Development
 
 **Project structure:**
@@ -324,9 +349,10 @@ filedetective/
 
 Built for intelligent file discovery across:
 - **muse-v1** (current work)
-- **muse-v0** (legacy)
 - **general projects**
+- **cc-projects** (Claude Code projects)
 - **.claude** (configuration)
+- **muse-v0** (legacy)
 
 **Analysis implementations:**
 - Token counting based on `analyze_markdown_notes.py`

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from core.tokenizer import count_tokens
+from .tokenizer import count_tokens
 
 
 @dataclass
@@ -159,7 +159,7 @@ class HistoryFinder:
             base_dir: Base directory for git root detection
             include_commit: Whether to include commit details
         """
-        from core.git_utils import get_git_root, get_file_status, get_file_last_commit
+        from .git_utils import get_git_root, get_file_status, get_file_last_commit
 
         git_root = get_git_root(base_dir)
 

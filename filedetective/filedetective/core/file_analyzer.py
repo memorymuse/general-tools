@@ -1,12 +1,12 @@
 """File analysis dispatcher."""
 from typing import List, Optional
 
-from analyzers.base_analyzer import FileStats, AggregateStats
-from analyzers.text_analyzer import TextAnalyzer
-from analyzers.markdown_analyzer import MarkdownAnalyzer
-from analyzers.python_analyzer import PythonAnalyzer
-from analyzers.javascript_analyzer import JavaScriptAnalyzer
-from utils.file_utils import FileType, detect_file_type, validate_file_types
+from ..analyzers.base_analyzer import FileStats, AggregateStats
+from ..analyzers.text_analyzer import TextAnalyzer
+from ..analyzers.markdown_analyzer import MarkdownAnalyzer
+from ..analyzers.python_analyzer import PythonAnalyzer
+from ..analyzers.javascript_analyzer import JavaScriptAnalyzer
+from ..utils.file_utils import FileType, detect_file_type, validate_file_types
 
 
 class FileAnalyzer:
