@@ -1088,7 +1088,7 @@ For existing cc-isolate users:
 4. **Discover and validate**: `devenv discover` finds existing essentials
 5. **First push**: Establishes new manifest baseline
 
-#### 7.2.2 Command Mapping
+#### 8.2.2 Command Mapping
 
 | cc-isolate | devenv | Notes |
 |------------|--------|-------|
@@ -1101,7 +1101,7 @@ For existing cc-isolate users:
 | `cc-isolate mount` | Deprecated | Profile isolation removed |
 | `cc-isolate profile *` | Deprecated | Profile isolation removed |
 
-#### 7.2.3 Deprecation Notice
+#### 8.2.3 Deprecation Notice
 
 After migration:
 - `cc-isolate` symlinks to `devenv` with deprecation warning
@@ -1118,3 +1118,4 @@ After migration:
 | 0.2 | 2026-01-05 | Removed open questions (moved to DECISIONS.md), removed implementation phases |
 | 0.3 | 2026-01-05 | Added paths.sh to directory structure; Added Section 7.1 UX Expectations (self-review Set 1) |
 | 0.4 | 2026-01-05 | Self-review Sets 2-7: Discovery algorithm, agent resolution interface, validation file format, scan triggers, encryption verification step, interruption recovery, consistency checks |
+| 0.5 | 2026-01-06 | Updated for Python implementation (D16); fixed section numbering |
