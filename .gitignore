@@ -30,3 +30,7 @@ Thumbs.db
 # Temporary
 *.tmp
 /tmp/
+
+# Standalone repos (have their own git history)
+devenv-sync/
+muse-backup/
