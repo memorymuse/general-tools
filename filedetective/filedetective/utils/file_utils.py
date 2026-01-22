@@ -114,33 +114,20 @@ def get_file_stats(file_path: str) -> dict:
 
 
 def validate_file_types(file_paths: list[str]) -> tuple[bool, Optional[str]]:
-    """Validate that all files are the same type category.
+    """Validate file types for analysis.
+
+    Since all text-based files can be analyzed with basic stats (tokens, lines, chars),
+    we now allow mixed file types. The core metrics are universal.
 
     Args:
         file_paths: List of file paths
 
     Returns:
-        Tuple of (is_valid, error_message)
+        Tuple of (is_valid, error_message) - always (True, None) now
     """
-    if not file_paths:
-        return True, None
-
-    types = [detect_file_type(fp) for fp in file_paths]
-
-    # Check if all are code
-    all_code = all(t.is_code for t in types)
-    # Check if all are text
-    all_text = all(t.is_text for t in types)
-
-    if all_code or all_text or len(set(types)) == 1:
-        return True, None
-
-    # Mixed types - generate error message
-    type_list = "\n".join(
-        f"  {Path(fp).name}: {t.value} ({'code' if t.is_code else 'text'})"
-        for fp, t in zip(file_paths, types)
-    )
-    return False, f"Cannot analyze mixed file types.\n{type_list}\nAnalyze separately or ensure all files are same type."
+    # All text-based files are valid for analysis
+    # Structure (-o) and dependencies (-d) are gracefully handled per-file
+    return True, None
 
 
 def should_skip(path: str, skip_dirs: set[str], skip_patterns: list[str]) -> bool:

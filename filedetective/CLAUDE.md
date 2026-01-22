@@ -132,18 +132,21 @@ Structure:
 
 ### Multi-File Comparison
 ```
-Analyzed 4 files:
+Analyzed 3 files:
 
-┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━┓
-┃ File           ┃ Tokens ┃ Lines ┃ Chars ┃
-┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━┩
-│ storage.py     │  1,247 │   342 │ 8,934 │
-│ manager.py     │    892 │   256 │ 6,012 │
-└────────────────┴────────┴───────┴───────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━┓
+┃ File                  ┃ Type       ┃ Tokens ┃ Lines ┃ Chars ┃ Words ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━┩
+│ storage.py [largest]  │ Python     │  1,247 │   342 │ 8,934 │     - │
+│ config.yaml           │ Text       │     56 │    13 │   183 │    23 │
+│ README.md [smallest]  │ Markdown   │     42 │    15 │   181 │    30 │
+└───────────────────────┴────────────┴────────┴───────┴───────┴───────┘
 
-Totals (4 files):
-  tokens:  3,027  │  lines:    874  │  chars:  21,143
+Totals (3 files):
+  tokens:  1,345  │  lines:    370  │  chars:  9,298  │  words:  53
 ```
+
+**Note:** Type column only appears when file types are mixed. For files of the same type, the column is hidden.
 
 ### History (`filedet hist`)
 ```
@@ -198,13 +201,19 @@ Configured in `config.yaml`:
 
 ## Supported File Types
 
+**Any text-based file is analyzable** with basic stats (tokens, lines, chars). Specialized analyzers provide structure (`-o`) and dependencies (`-d`) for supported types:
+
 | Extension(s) | Type | `-o` (structure) | `-d` (deps) | Implementation |
 |--------------|------|------------------|-------------|----------------|
 | `.py` | Python | Functions/classes | Imports | AST-based (accurate) |
-| `.js`, `.jsx`, `.ts`, `.tsx` | JavaScript/TypeScript | Functions/classes | ES6/CommonJS imports | Regex-based (lightweight, ~80-90% coverage) |
+| `.js`, `.jsx`, `.ts`, `.tsx` | JavaScript/TypeScript | Functions/classes | ES6/CommonJS imports | Regex-based (~80-90% coverage) |
 | `.md` | Markdown | TOC from headers | N/A | Regex |
 | `.txt` | Text | N/A | N/A | Basic stats only |
-| `.json`, `.yaml`, `.yml` | Config | N/A | N/A | Basic stats only |
+| `.json`, `.yaml`, `.yml`, `.xml`, `.toml`, etc. | Config/Other | N/A | N/A | Basic stats only (falls back to text analyzer) |
+
+**Mixed file types:** You can analyze files of different types together. Totals are calculated across all files. A Type column appears when file types are mixed.
+
+**Graceful flag handling:** Using `-o` or `-d` on unsupported file types silently skips (no error). Structure/deps are simply omitted from output.
 
 **Design choice (JS/TS):** Chose regex over AST for lightweight implementation with no external dependencies. Covers most real-world patterns. Can upgrade to proper AST parser (esprima, babel) if needed.
 

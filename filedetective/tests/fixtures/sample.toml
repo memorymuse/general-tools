@@ -1,0 +1,11 @@
+[project]
+name = "sample-project"
+version = "1.0.0"
+
+[database]
+host = "localhost"
+port = 5432
+
+[server]
+port = 8080
+timeout = 30

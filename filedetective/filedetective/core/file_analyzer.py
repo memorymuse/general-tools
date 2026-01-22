@@ -44,21 +44,18 @@ class FileAnalyzer:
         """
         file_type = detect_file_type(file_path)
 
-        # Validate flags
-        if show_deps and not file_type.is_code:
-            raise ValueError(
-                f"-d (--deps) flag only applies to code files.\n"
-                f"  {file_path} is type: {file_type.value}\n"
-                f"Try -o (--outline) for table of contents."
-            )
+        # Gracefully handle -d flag for non-code files
+        # (dependencies will simply be None for these file types)
+        effective_show_deps = show_deps and file_type.is_code
 
-        # Get analyzer
+        # Get analyzer - fallback to TextAnalyzer for unsupported types
+        # This allows analyzing any text-based file (XML, YAML, TOML, etc.)
         analyzer = self.analyzers.get(file_type)
         if analyzer is None:
-            raise ValueError(f"Unsupported file type: {file_type.value}")
+            analyzer = self.analyzers[FileType.TEXT]
 
         # Analyze
-        return analyzer.analyze(file_path, show_outline, show_deps)
+        return analyzer.analyze(file_path, show_outline, effective_show_deps)
 
     def analyze_multiple(
         self,
@@ -77,9 +74,9 @@ class FileAnalyzer:
             AggregateStats object
 
         Raises:
-            ValueError: If files are mixed types or invalid flags
+            ValueError: If no files could be analyzed
         """
-        # Validate all files are same type
+        # Note: Mixed file types are allowed - all text-based files can be analyzed
         is_valid, error_msg = validate_file_types(file_paths)
         if not is_valid:
             raise ValueError(error_msg)

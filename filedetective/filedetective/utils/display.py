@@ -58,9 +58,15 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
         reverse=True
     )
 
+    # Check if we have mixed file types (show Type column if so)
+    unique_types = set(s.file_type for s in sorted_stats)
+    show_type_column = len(unique_types) > 1
+
     # Create table
     table = Table(show_header=True, header_style="bold cyan")
     table.add_column("File", style="cyan", no_wrap=True, width=30)
+    if show_type_column:
+        table.add_column("Type", style="dim", no_wrap=True, width=12)
     table.add_column("Tokens", justify="right", style="magenta")
     table.add_column("Lines", justify="right", style="blue")
     table.add_column("Chars", justify="right", style="green")
@@ -78,12 +84,18 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
         elif i == len(sorted_stats) - 1:
             marker = " [dim]\\[smallest][/]"
 
-        row = [
-            stats.display_name + marker,
+        row = [stats.display_name + marker]
+        if show_type_column:
+            # Shorten long type names for display
+            type_display = stats.file_type
+            if len(type_display) > 12:
+                type_display = type_display[:10] + ".."
+            row.append(type_display)
+        row.extend([
             f"{stats.tokens:,}",
             f"{stats.lines:,}",
             f"{stats.chars:,}",
-        ]
+        ])
 
         if has_words:
             row.append(f"{stats.words:,}" if stats.words else "-")
