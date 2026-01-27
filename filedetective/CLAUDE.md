@@ -43,16 +43,42 @@ filedet *.py                    # Compare all Python files
 filedet readme.md -o            # Show table of contents
 ```
 
-### Smart File Discovery
-Files are auto-searched if not found locally:
+### Analyze Directories
 ```bash
-filedet storage                 # Auto-wraps as *storage*, finds and analyzes
-filedet "project-claude"        # Searches all configured directories
+filedet ./src                   # All files in src/ (top-level only)
+filedet ./src -r                # Recursive (include subdirectories)
+filedet ./src -r -ft .py        # Recursive, Python files only
+filedet ./src -r -ft .py .md    # Recursive, multiple extensions
 ```
 
 **Behavior:**
-- Case-insensitive matching (`CLAUDE.md` and `claude.md` are equivalent)
-- No extension/wildcard → Wraps in wildcards: `*pattern*`
+- Uses filesystem check (`is_dir()`) to distinguish directories from extensionless files (Unix scripts)
+- Non-recursive by default (top-level files only)
+- `-r` enables recursive traversal through subdirectories
+- `-ft` filters by extension (same syntax as `hist` command)
+- Skips common non-content directories: `.git/`, `.venv/`, `node_modules/`, `__pycache__/`, etc.
+- Skips lock files, `.pyc`, and other generated files
+
+### Smart File Discovery
+
+**Local-first resolution** (case-insensitive):
+```bash
+filedet claude.md               # Finds CLAUDE.md in current directory
+filedet ./storage.py            # Explicit local, case-insensitive
+```
+
+**Global search** (requires wildcards or no extension):
+```bash
+filedet storage                 # Auto-wraps as *storage*, searches all dirs
+filedet "*claude*"              # Explicit wildcard, searches all dirs
+filedet find storage.py         # Use 'find' command for global search
+```
+
+**Behavior:**
+- **Files with extensions** (e.g., `claude.md`): Local-only. If not found, shows error with suggestion to use `find`
+- **Names without extensions** (e.g., `storage`): Auto-wraps in `*pattern*`, searches configured directories
+- **Explicit wildcards** (e.g., `*storage*`): Searches configured directories as-is
+- Case-insensitive matching (`CLAUDE.md` and `claude.md` are equivalent locally)
 - Single match → Analyzes immediately
 - Multiple matches → Shows all (sorted by recency) and asks to refine
 
@@ -161,28 +187,51 @@ Recent files in ~/projects/myapp (15 shown)
 └──────────────────┴────────┴───────────────────────┴───────┴────────┘
 ```
 
-## Architecture
+## Repository Structure
 
 ```
-filedetective/
-├── filedet.py              # CLI entry point, argument parsing
-├── config.yaml             # Search directories, skip patterns, defaults
-├── core/
-│   ├── file_finder.py      # Priority-based file discovery with path/filename pattern matching
-│   ├── file_analyzer.py    # Dispatch to type-specific analyzers
-│   ├── history.py          # HistoryFinder for recent files (hist command)
-│   ├── git_utils.py        # Git status and commit info utilities
-│   └── tokenizer.py        # tiktoken wrapper with fallback
-├── analyzers/
-│   ├── base_analyzer.py    # Abstract base with FileStats/AggregateStats dataclasses
-│   ├── text_analyzer.py    # Plain text analysis
-│   ├── markdown_analyzer.py # TOC extraction from headers
-│   ├── python_analyzer.py  # AST-based function/class extraction
-│   └── javascript_analyzer.py # Regex-based extraction for JS/TS
-└── utils/
-    ├── file_utils.py       # FileType enum, type detection
-    └── display.py          # Rich-based output formatting
+filedetective/                    # Repository root
+├── CLAUDE.md                     # This file
+├── README.md
+├── pyproject.toml                # Package configuration
+├── requirements.txt
+├── config.yaml                   # Search directories, skip patterns, defaults
+├── filedetective/                # Main package (installed as 'filedetective')
+│   ├── __init__.py
+│   ├── __main__.py               # Entry point for `python -m filedetective`
+│   ├── cli.py                    # CLI argument parsing, command dispatch
+│   ├── config.yaml               # Package-local config copy
+│   ├── core/
+│   │   ├── file_finder.py        # Priority-based file discovery, pattern matching
+│   │   ├── file_analyzer.py      # Dispatch to type-specific analyzers
+│   │   ├── history.py            # HistoryFinder for recent files (hist command)
+│   │   ├── git_utils.py          # Git status and commit info utilities
+│   │   └── tokenizer.py          # tiktoken wrapper with fallback
+│   ├── analyzers/
+│   │   ├── base_analyzer.py      # Abstract base with FileStats/AggregateStats dataclasses
+│   │   ├── text_analyzer.py      # Plain text analysis
+│   │   ├── markdown_analyzer.py  # TOC extraction from headers
+│   │   ├── python_analyzer.py    # AST-based function/class extraction
+│   │   └── javascript_analyzer.py # Regex-based extraction for JS/TS
+│   └── utils/
+│       ├── file_utils.py         # FileType enum, type detection
+│       └── display.py            # Rich-based output formatting
+├── tests/                        # Test directory (pytest)
+│   ├── fixtures/                 # Sample files for testing
+│   └── test_file_analyzer.py
+└── build/                        # Build artifacts (gitignored)
 ```
+
+**Running the tool:**
+```bash
+# From repo root (development)
+python3 -m filedetective <args>
+
+# If installed via pip
+filedet <args>
+```
+
+## Architecture
 
 **Key patterns:**
 - `BaseAnalyzer` abstract class: Subclasses implement `_get_type_name()` and `_analyze_specific()`
@@ -233,6 +282,8 @@ Uses tiktoken with `cl100k_base` encoding. Fallback: `words * 1.3` if tiktoken u
 |------|------|-------------|
 | `-o` | `--outline` | Show structure (TOC for text, functions for code) |
 | `-d` | `--deps` | Show dependencies (code files only) |
+| `-r` | `--recursive` | Include subdirectories when analyzing a directory |
+| `-ft` | `--filetypes` | Filter by extension(s) when analyzing a directory |
 
 ### Hist mode (`filedet hist`)
 | Flag | Long | Description |
@@ -245,9 +296,11 @@ Uses tiktoken with `cl100k_base` encoding. Fallback: `words * 1.3` if tiktoken u
 
 ## Troubleshooting
 
-**"Found N matches"**: Multiple files match pattern. Refine with more specific path (e.g., `"cc-*/drafts/project*.md"` instead of `"project*.md"`) or use the full path from the list shown.
+**"File not found: X.ext"**: Files with extensions are resolved locally only. If you want to search configured directories, use:
+- `filedet find X.ext` to search all directories
+- `filedet "*X*"` to use wildcard pattern matching
 
-**Mixed file types error**: All analyzed files must be same type category (all code or all text). Analyze separately if needed.
+**"Found N matches"**: Multiple files match pattern. Refine with more specific path (e.g., `"cc-*/drafts/project*.md"` instead of `"project*.md"`) or use the full path from the list shown.
 
 **Path patterns not working**:
 - Path patterns need `/`: `filedet "cc-*/drafts/*.md"`

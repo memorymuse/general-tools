@@ -13,6 +13,7 @@ Usage:
 import sys
 import argparse
 from pathlib import Path
+from typing import Optional
 
 from .core.file_finder import FileFinder
 from .core.file_analyzer import FileAnalyzer
@@ -46,6 +47,11 @@ Examples:
   # Multiple files
   filedet *.py                    # Analyze all Python files in current dir
   filedet file1.py file2.py       # Analyze specific files
+
+  # Analyze directories
+  filedet ./src                   # All files in src/ (non-recursive)
+  filedet ./src -r                # Recursive (include subdirectories)
+  filedet ./src -r -ft .py .md    # Recursive, filter by extension
 
   # Path-based patterns (use / for directory matching)
   filedet "cc-*/drafts/*.md"      # Files in cc-* directories
@@ -95,6 +101,19 @@ Examples:
         "-l", "--local",
         action="store_true",
         help="Search current directory instead of configured project directories"
+    )
+
+    parser.add_argument(
+        "-r", "--recursive",
+        action="store_true",
+        help="Include subdirectories when analyzing a directory"
+    )
+
+    parser.add_argument(
+        "-ft", "--filetypes",
+        nargs="+",
+        metavar="EXT",
+        help="Filter by file extension(s) when analyzing a directory (e.g., .py .md)"
     )
 
     return parser
@@ -322,14 +341,125 @@ def handle_hist(args: list[str]) -> int:
         return 1
 
 
-def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local: bool = False) -> int:
+def enumerate_directory_files(
+    directory: Path,
+    recursive: bool = False,
+    filetypes: Optional[list[str]] = None
+) -> list[str]:
+    """Enumerate files in a directory for analysis.
+
+    Args:
+        directory: Directory to enumerate
+        recursive: If True, include subdirectories
+        filetypes: Optional list of extensions to filter by (e.g., [".md", "py"])
+
+    Returns:
+        List of absolute file paths, sorted by modification time (most recent first)
+    """
+    from .core.history import HistoryFinder
+    import fnmatch
+
+    finder = HistoryFinder()
+    files_found = []
+
+    # Normalize filetype patterns for matching
+    normalized_filetypes = None
+    if filetypes:
+        normalized_filetypes = [finder._normalize_extension(ft) for ft in filetypes]
+
+    if recursive:
+        # Use os.walk for recursive traversal
+        import os
+        for root, dirs, files in os.walk(directory, followlinks=False):
+            # Filter out skip directories in-place
+            dirs[:] = [d for d in dirs if not finder._should_skip_dir(d)]
+
+            for filename in files:
+                file_path = Path(root) / filename
+
+                # Skip files that should be skipped
+                if finder._should_skip_file(filename):
+                    continue
+
+                # Check filetype filter
+                if normalized_filetypes and not finder._matches_filetypes(filename, normalized_filetypes):
+                    continue
+
+                # Only include readable files
+                if file_path.is_file():
+                    files_found.append(file_path)
+    else:
+        # Non-recursive: only top-level files
+        for item in directory.iterdir():
+            if not item.is_file():
+                continue
+
+            filename = item.name
+
+            # Skip files that should be skipped
+            if finder._should_skip_file(filename):
+                continue
+
+            # Check filetype filter
+            if normalized_filetypes and not finder._matches_filetypes(filename, normalized_filetypes):
+                continue
+
+            files_found.append(item)
+
+    # Sort by modification time (most recent first)
+    files_found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    return [str(f.resolve()) for f in files_found]
+
+
+def _find_case_insensitive_local(pattern: str) -> Optional[Path]:
+    """Find a file in current directory with case-insensitive matching.
+
+    Args:
+        pattern: Filename to search for (may include ./ prefix)
+
+    Returns:
+        Path to matching file if found, None otherwise
+    """
+    # Strip ./ prefix if present
+    filename = pattern.lstrip('./')
+    filename_lower = filename.lower()
+
+    for item in Path.cwd().iterdir():
+        if item.is_file() and item.name.lower() == filename_lower:
+            return item
+    return None
+
+
+def _has_extension(pattern: str) -> bool:
+    """Check if pattern has a file extension.
+
+    Args:
+        pattern: Filename or pattern to check
+
+    Returns:
+        True if has an extension like .py, .md, etc.
+    """
+    # Get just the filename part (strip any directory prefix)
+    name = Path(pattern).name
+    # Check for extension: has a dot, and something after it that's not a wildcard
+    if '.' in name:
+        suffix = name.rsplit('.', 1)[-1]
+        # It's an extension if it's alphanumeric (not a wildcard pattern)
+        return suffix.isalnum()
+    return False
+
+
+def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local: bool = False, recursive: bool = False, filetypes: Optional[list[str]] = None) -> int:
     """Handle file analysis.
 
     Args:
-        files: List of file paths
+        files: List of file paths or directories
         show_outline: Show structure
         show_deps: Show dependencies
         local: If True, search current directory instead of configured dirs
+        recursive: If True, include subdirectories when analyzing directories
+        filetypes: Optional list of extensions to filter by (for directory analysis)
 
     Returns:
         Exit code
@@ -343,19 +473,57 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
     for file_pattern in files:
         file_path = Path(file_pattern).expanduser()
 
+        # Check if pattern explicitly references current directory
+        is_explicit_local = file_pattern.startswith('./') or file_pattern.startswith('.\\')
+
         if file_path.exists():
-            # Direct path (or shell-expanded path)
-            resolved_files.append(str(file_path.resolve()))
+            # Check if it's a directory (use filesystem check, not heuristics)
+            if file_path.is_dir():
+                # Enumerate files from directory
+                dir_files = enumerate_directory_files(file_path, recursive=recursive, filetypes=filetypes)
+                if not dir_files:
+                    filter_msg = f" matching {filetypes}" if filetypes else ""
+                    display_error(f"No files found in directory{filter_msg}: {file_pattern}")
+                    return 1
+                resolved_files.extend(dir_files)
+            else:
+                # It's a file (could be extensionless like a Unix script)
+                resolved_files.append(str(file_path.resolve()))
+        elif is_explicit_local:
+            # Explicit local path (./) - only search locally with case-insensitive matching
+            local_match = _find_case_insensitive_local(file_pattern)
+            if local_match:
+                resolved_files.append(str(local_match.resolve()))
+            else:
+                display_error(f"No files found matching: {file_pattern}")
+                return 1
         else:
-            # File doesn't exist locally - search for it
+            # File doesn't exist locally - try case-insensitive local match first
+            local_match = _find_case_insensitive_local(file_pattern)
+            if local_match:
+                resolved_files.append(str(local_match.resolve()))
+                continue
+
+            # Not found locally - search in configured directories
             # Detect if wildcards are present
             has_wildcard = '*' in file_pattern or '?' in file_pattern
+            has_ext = _has_extension(file_pattern)
+
+            # Patterns with extensions but no wildcards are treated as specific files
+            # Only search configured dirs if user explicitly uses wildcards or fuzzy names
+            if has_ext and not has_wildcard:
+                # Specific file with extension - don't auto-search everywhere
+                display_error(
+                    f"File not found: {file_pattern}\n"
+                    f"Use 'filedet find {file_pattern}' to search all configured directories."
+                )
+                return 1
 
             if has_wildcard:
-                # Use pattern as-is (finder will handle explicit directory prefixes)
+                # Use pattern as-is (finder will handle it with case-insensitive matching)
                 search_pattern = file_pattern
             else:
-                # Wrap in wildcards for fuzzy matching
+                # No extension/wildcard - wrap in wildcards for fuzzy matching
                 search_pattern = f"*{file_pattern}*"
 
             matches = finder.find_files(search_pattern, local_dir=local_dir)
@@ -449,7 +617,9 @@ def main():
             args.files_or_command,
             args.outline,
             args.deps,
-            local=args.local
+            local=args.local,
+            recursive=args.recursive,
+            filetypes=args.filetypes
         )
 
 
