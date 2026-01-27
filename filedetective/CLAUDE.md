@@ -15,21 +15,23 @@ FileDetective (`filedet`) is a CLI tool for intelligent file discovery and analy
 ## Commands
 
 ```bash
-# Run the CLI (from this directory)
-python3 filedet.py <file(s)> [flags]
-python3 filedet.py find <pattern>
-python3 filedet.py grep <term> <directory>
-python3 filedet.py hist [directory] [-n COUNT] [-ft EXT...]
+# Install globally (REQUIRED - use uv, NOT pip)
+uv tool install .
 
-# Install dependencies
-pip install -r requirements.txt
+# After installation, use directly
+filedet <file(s)> [flags]
+filedet find <pattern>
+filedet grep <term> <directory>
+filedet hist [directory] [-n COUNT] [-ft EXT...]
 
-# Run tests (test directory exists but tests not yet implemented)
+# Development (run without installing)
+python3 -m filedetective <args>
+
+# Run tests
 pytest tests/
-
-# Shell alias (add to .bashrc/.zshrc for global access)
-alias filedet='python3 ~/projects/general_tools/filedetective/filedet.py'
 ```
+
+**IMPORTANT**: Always use `uv tool install`, never `pip install`. This project uses uv for dependency management.
 
 ## Usage Examples
 
@@ -189,14 +191,17 @@ Recent files in ~/projects/myapp (15 shown)
 
 ## Repository Structure
 
+**IMPORTANT: Nested directory structure explained.**
+
+This repo uses standard Python packaging: the outer `filedetective/` is the repository, the inner `filedetective/` is the installable package. This is NOT a mistake.
+
 ```
-filedetective/                    # Repository root
+filedetective/                    # ← REPOSITORY ROOT (you are here)
 ├── CLAUDE.md                     # This file
 ├── README.md
-├── pyproject.toml                # Package configuration
-├── requirements.txt
+├── pyproject.toml                # Package configuration (defines 'filedet' CLI entry point)
 ├── config.yaml                   # Search directories, skip patterns, defaults
-├── filedetective/                # Main package (installed as 'filedetective')
+├── filedetective/                # ← PYTHON PACKAGE (what gets installed)
 │   ├── __init__.py
 │   ├── __main__.py               # Entry point for `python -m filedetective`
 │   ├── cli.py                    # CLI argument parsing, command dispatch
@@ -222,13 +227,19 @@ filedetective/                    # Repository root
 └── build/                        # Build artifacts (gitignored)
 ```
 
+**Why nested same-name directories?**
+- `uv tool install .` installs the inner `filedetective/` package
+- `python -m filedetective` works because of `__main__.py` in the package
+- Keeps repo files (README, pyproject.toml, tests/) separate from package code
+- This is standard Python packaging convention
+
 **Running the tool:**
 ```bash
-# From repo root (development)
-python3 -m filedetective <args>
-
-# If installed via pip
+# After installing with uv
 filedet <args>
+
+# Development (without installing)
+python3 -m filedetective <args>
 ```
 
 ## Architecture
