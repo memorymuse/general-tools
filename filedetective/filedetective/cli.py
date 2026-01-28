@@ -258,6 +258,57 @@ def handle_grep(term: str, directory: str) -> int:
         return 1
 
 
+def handle_reinstall() -> int:
+    """Handle reinstall command - rebuilds and reinstalls filedet from source.
+
+    Returns:
+        Exit code
+    """
+    import subprocess
+    import os
+
+    # Source directory - use env var or default location
+    source_dir = Path(os.environ.get(
+        "FILEDET_SOURCE",
+        "~/projects/general-tools/filedetective"
+    )).expanduser()
+
+    if not source_dir.exists():
+        display_error(
+            f"Source directory not found: {source_dir}\n"
+            f"Set FILEDET_SOURCE env var to override."
+        )
+        return 1
+
+    print(f"Reinstalling filedet from {source_dir}...")
+
+    # Clean uv cache
+    print("Cleaning uv cache...")
+    result = subprocess.run(["uv", "cache", "clean"], capture_output=True, text=True)
+    if result.returncode != 0:
+        display_error(f"Failed to clean cache: {result.stderr}")
+        return 1
+
+    # Uninstall
+    print("Uninstalling current version...")
+    subprocess.run(["uv", "tool", "uninstall", "filedetective"], capture_output=True)
+
+    # Reinstall from source
+    print("Installing from source...")
+    result = subprocess.run(
+        ["uv", "tool", "install", str(source_dir)],
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        display_error(f"Failed to install: {result.stderr}")
+        return 1
+
+    print("Done! filedet reinstalled successfully.")
+    return 0
+
+
 HIST_HELP = """usage: filedet hist [directory] [-n COUNT] [-ft EXT [EXT ...]] [-g] [-gd] [-full]
 
 Show recently modified files in a directory tree.
@@ -671,6 +722,9 @@ def main():
         term = args.files_or_command[1]
         directory = args.files_or_command[2]
         return handle_grep(term, directory)
+
+    elif first_arg == "reinstall":
+        return handle_reinstall()
 
     elif first_arg == "hist":
         # Pass remaining args to hist handler
