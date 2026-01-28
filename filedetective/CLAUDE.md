@@ -45,6 +45,23 @@ filedet *.py                    # Compare all Python files
 filedet readme.md -o            # Show table of contents
 ```
 
+### Line Ranges
+Analyze specific line ranges within files (useful for token counting portions of code):
+```bash
+filedet file.py:10-50           # Lines 10-50 only
+filedet file.py:100-            # Line 100 to end
+filedet file.py:-50             # Start to line 50
+filedet a.py:10-50 b.py:20-30   # Multi-file with different ranges
+```
+
+Output shows the range and context:
+```
+File: storage.py:10-50 (~/projects/.../storage.py)
+Lines: 10-50 (41 of 342 total)
+
+tokens:    247  │  lines:     41  │  size:   1.8 KB
+```
+
 ### Analyze Directories
 ```bash
 filedet ./src                   # All files in src/ (top-level only)
@@ -138,7 +155,7 @@ File: storage.py (~/projects/muse-v1/core/storage.py)
 Modified: 25.11.04 14:32
 Type: Python
 
-tokens:  1,247  │  lines:    342  │  chars:   8,934
+tokens:  1,247  │  lines:    342  │  size:   8.7 KB
 tks/ln:    3.6  (med: 3)
 ```
 
@@ -162,16 +179,16 @@ Structure:
 ```
 Analyzed 3 files:
 
-┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━┓
-┃ File                  ┃ Type       ┃ Tokens ┃ Lines ┃ Chars ┃ Words ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━┩
-│ storage.py [largest]  │ Python     │  1,247 │   342 │ 8,934 │     - │
-│ config.yaml           │ Text       │     56 │    13 │   183 │    23 │
-│ README.md [smallest]  │ Markdown   │     42 │    15 │   181 │    30 │
-└───────────────────────┴────────────┴────────┴───────┴───────┴───────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━┓
+┃ File                  ┃ Type       ┃ Tokens ┃ Lines ┃    Size ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━┩
+│ storage.py [largest]  │ Python     │  1,247 │   342 │  8.7 KB │
+│ config.yaml           │ Text       │     56 │    13 │  183.0 B│
+│ README.md [smallest]  │ Markdown   │     42 │    15 │  181.0 B│
+└───────────────────────┴────────────┴────────┴───────┴─────────┘
 
 Totals (3 files):
-  tokens:  1,345  │  lines:    370  │  chars:  9,298  │  words:  53
+  tokens:  1,345  │  lines:    370  │  size:    9.1 KB
 ```
 
 **Note:** Type column only appears when file types are mixed. For files of the same type, the column is hidden.
