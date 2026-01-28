@@ -26,7 +26,9 @@ class FileStats:
 
     # Rate calculations
     tokens_per_line_mean: Optional[float] = None
-    tokens_per_line_median: Optional[int] = None
+    tokens_per_line_median: Optional[float] = None
+    chars_per_line_mean: Optional[float] = None
+    chars_per_line_median: Optional[float] = None
 
     # Structure (for -o flag)
     structure: Optional[str] = None
@@ -134,18 +136,22 @@ class BaseAnalyzer(ABC):
 
         # Calculate rates
         if stats.lines > 0:
-            # Mean: total tokens / total lines
+            # Mean calculations
             stats.tokens_per_line_mean = stats.tokens / stats.lines
+            stats.chars_per_line_mean = stats.chars / stats.lines
 
-            # Median: per-line tokens for non-empty lines only
+            # Median: per-line stats for non-empty lines only
             tokens_per_line = []
+            chars_per_line = []
             for line in lines_list:
                 if line.strip():  # Skip empty lines
-                    line_tokens = count_tokens(line)
-                    tokens_per_line.append(line_tokens)
+                    tokens_per_line.append(count_tokens(line))
+                    chars_per_line.append(len(line))
 
             if tokens_per_line:
                 stats.tokens_per_line_median = round(statistics.median(tokens_per_line), 1)
+            if chars_per_line:
+                stats.chars_per_line_median = round(statistics.median(chars_per_line), 1)
 
         # Let subclasses add more specific stats
         self._analyze_specific(stats, content, show_outline, show_deps)

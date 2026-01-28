@@ -119,6 +119,9 @@ Examples:
   filedet hist -g                 # Show git status column
   filedet hist -gd                # Show git status + last commit
   filedet hist -h                 # Show hist command help
+
+  # Maintenance
+  filedet reinstall               # Rebuild and reinstall from source
         """
     )
 

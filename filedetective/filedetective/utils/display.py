@@ -197,11 +197,19 @@ def _display_core_stats(stats: FileStats) -> None:
     console.print("  │  ".join(parts))
 
     # Build rate line
+    rate_parts = []
     if stats.tokens_per_line_mean is not None:
-        console.print(
+        rate_parts.append(
             f"tks/ln:  [magenta]{stats.tokens_per_line_mean:>5.1f}[/]  "
             f"[dim](med: {stats.tokens_per_line_median})[/]"
         )
+    if stats.chars_per_line_mean is not None:
+        rate_parts.append(
+            f"chars/ln:  [green]{stats.chars_per_line_mean:>5.1f}[/]  "
+            f"[dim](med: {stats.chars_per_line_median})[/]"
+        )
+    if rate_parts:
+        console.print("  │  ".join(rate_parts))
 
 
 def shorten_path(path: str, max_length: int = 50) -> str:
