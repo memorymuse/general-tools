@@ -41,8 +41,14 @@ def create_parser() -> argparse.ArgumentParser:
 Examples:
   # Analyze files (auto-searches if not found locally)
   filedet storage                 # Find and analyze storage files
-  filedet storage.py -o           # Show structure
+  filedet storage.py -o           # Show structure (see below)
   filedet storage.py -o -d        # Show structure + dependencies
+
+  # The -o flag extracts structure based on file type:
+  #   Markdown: Heading hierarchy as navigable TOC (# → ## → ###)
+  #   Python:   Classes, methods, functions with line numbers (AST-parsed)
+  #   JS/TS:    Functions, classes, exports (regex-based, ~90% coverage)
+  #   Other:    Skipped silently (no error, just omits structure)
 
   # Multiple files
   filedet *.py                    # Analyze all Python files in current dir
@@ -82,7 +88,7 @@ Examples:
     parser.add_argument(
         "-o", "--outline",
         action="store_true",
-        help="Show structure (TOC for text, functions for code)"
+        help="Show file structure: Markdown→heading TOC, Python→classes/functions (AST), JS/TS→functions/exports (regex)"
     )
 
     parser.add_argument(
