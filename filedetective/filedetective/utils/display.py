@@ -17,14 +17,34 @@ from ..core.tokenizer import format_size
 console = Console()
 
 
+def _format_line_range(line_start: int | None, line_end: int | None) -> str:
+    """Format a line range for display.
+
+    Args:
+        line_start: Start line (1-indexed) or None
+        line_end: End line (1-indexed) or None
+
+    Returns:
+        Formatted string like "10-50", "10-", or "-50"
+    """
+    start = str(line_start) if line_start else ""
+    end = str(line_end) if line_end else ""
+    return f"{start}-{end}"
+
+
 def display_single_file(stats: FileStats) -> None:
     """Display statistics for a single file.
 
     Args:
         stats: FileStats object
     """
-    # Header
-    console.print(f"\n[bold cyan]File:[/] {stats.display_name} ([dim]{stats.display_path}[/])")
+    # Header - include line range if analyzing subset
+    if stats.has_line_range:
+        range_str = _format_line_range(stats.line_start, stats.line_end)
+        console.print(f"\n[bold cyan]File:[/] {stats.display_name}:{range_str} ([dim]{stats.display_path}[/])")
+        console.print(f"[dim]Lines:[/] {range_str} ({stats.lines} of {stats.total_lines} total)")
+    else:
+        console.print(f"\n[bold cyan]File:[/] {stats.display_name} ([dim]{stats.display_path}[/])")
     console.print(f"[dim]Modified:[/] {format_date(stats.modified_date)}")
     console.print(f"[dim]Type:[/] {stats.file_type}")
     console.print()
@@ -84,7 +104,13 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
         elif i == len(sorted_stats) - 1:
             marker = " [dim]\\[smallest][/]"
 
-        row = [stats.display_name + marker]
+        # Include line range in display name if analyzing subset
+        display_name = stats.display_name
+        if stats.has_line_range:
+            range_str = _format_line_range(stats.line_start, stats.line_end)
+            display_name = f"{display_name}:{range_str}"
+
+        row = [display_name + marker]
         if show_type_column:
             # Shorten long type names for display
             type_display = stats.file_type

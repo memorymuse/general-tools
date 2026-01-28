@@ -12,8 +12,9 @@ Usage:
 """
 import sys
 import argparse
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from .core.file_finder import FileFinder
 from .core.file_analyzer import FileAnalyzer
@@ -29,6 +30,42 @@ from .utils.display import (
 
 
 VERSION = "0.2.0"
+
+
+def parse_file_with_range(file_arg: str) -> Tuple[str, Optional[int], Optional[int]]:
+    """Parse a file argument that may include a line range.
+
+    Supported formats:
+        file.py         → (file.py, None, None)     # Full file
+        file.py:10-50   → (file.py, 10, 50)         # Lines 10-50
+        file.py:10-     → (file.py, 10, None)       # Line 10 to end
+        file.py:-50     → (file.py, None, 50)       # Start to line 50
+
+    Args:
+        file_arg: File path, optionally with :start-end suffix
+
+    Returns:
+        Tuple of (file_path, line_start, line_end)
+        line_start/line_end are 1-indexed and inclusive, or None
+    """
+    # Match pattern: path:start-end where start and end are optional
+    match = re.match(r'^(.+):(\d*)-(\d*)$', file_arg)
+    if match:
+        file_path = match.group(1)
+        start_str = match.group(2)
+        end_str = match.group(3)
+
+        line_start = int(start_str) if start_str else None
+        line_end = int(end_str) if end_str else None
+
+        # Validate: if both provided, start must be <= end
+        if line_start is not None and line_end is not None and line_start > line_end:
+            raise ValueError(f"Invalid range: start ({line_start}) > end ({line_end})")
+
+        return file_path, line_start, line_end
+
+    # No range specified
+    return file_arg, None, None
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -49,6 +86,12 @@ Examples:
   #   Python:   Classes, methods, functions with line numbers (AST-parsed)
   #   JS/TS:    Functions, classes, exports (regex-based, ~90% coverage)
   #   Other:    Skipped silently (no error, just omits structure)
+
+  # Line ranges (count tokens for specific lines)
+  filedet file.py:10-50           # Lines 10-50 only
+  filedet file.py:100-            # Line 100 to end
+  filedet file.py:-50             # Start to line 50
+  filedet a.py:10-50 b.py:20-30   # Multi-file with ranges
 
   # Multiple files
   filedet *.py                    # Analyze all Python files in current dir
@@ -460,7 +503,7 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
     """Handle file analysis.
 
     Args:
-        files: List of file paths or directories
+        files: List of file paths or directories (optionally with :start-end line ranges)
         show_outline: Show structure
         show_deps: Show dependencies
         local: If True, search current directory instead of configured dirs
@@ -474,9 +517,17 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
     finder = FileFinder()
     local_dir = Path.cwd() if local else None
 
-    # Resolve file paths
-    resolved_files = []
-    for file_pattern in files:
+    # Resolve file paths - stores tuples of (path, line_start, line_end)
+    resolved_files: list[Tuple[str, Optional[int], Optional[int]]] = []
+
+    for file_arg in files:
+        # Parse potential line range (e.g., file.py:10-50)
+        try:
+            file_pattern, line_start, line_end = parse_file_with_range(file_arg)
+        except ValueError as e:
+            display_error(str(e))
+            return 1
+
         file_path = Path(file_pattern).expanduser()
 
         # Check if pattern explicitly references current directory
@@ -485,21 +536,26 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
         if file_path.exists():
             # Check if it's a directory (use filesystem check, not heuristics)
             if file_path.is_dir():
+                # Line ranges don't apply to directories
+                if line_start is not None or line_end is not None:
+                    display_error(f"Line ranges not supported for directories: {file_arg}")
+                    return 1
                 # Enumerate files from directory
                 dir_files = enumerate_directory_files(file_path, recursive=recursive, filetypes=filetypes)
                 if not dir_files:
                     filter_msg = f" matching {filetypes}" if filetypes else ""
                     display_error(f"No files found in directory{filter_msg}: {file_pattern}")
                     return 1
-                resolved_files.extend(dir_files)
+                # Directory files get no line range
+                resolved_files.extend((f, None, None) for f in dir_files)
             else:
                 # It's a file (could be extensionless like a Unix script)
-                resolved_files.append(str(file_path.resolve()))
+                resolved_files.append((str(file_path.resolve()), line_start, line_end))
         elif is_explicit_local:
             # Explicit local path (./) - only search locally with case-insensitive matching
             local_match = _find_case_insensitive_local(file_pattern)
             if local_match:
-                resolved_files.append(str(local_match.resolve()))
+                resolved_files.append((str(local_match.resolve()), line_start, line_end))
             else:
                 display_error(f"No files found matching: {file_pattern}")
                 return 1
@@ -507,7 +563,7 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
             # File doesn't exist locally - try case-insensitive local match first
             local_match = _find_case_insensitive_local(file_pattern)
             if local_match:
-                resolved_files.append(str(local_match.resolve()))
+                resolved_files.append((str(local_match.resolve()), line_start, line_end))
                 continue
 
             # Not found locally - search in configured directories
@@ -541,8 +597,8 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
                 display_error(f"No files found matching: {file_pattern}")
                 return 1
             elif len(matches) == 1:
-                # Single match - analyze it
-                resolved_files.append(matches[0].path)
+                # Single match - analyze it (preserve any line range from original arg)
+                resolved_files.append((matches[0].path, line_start, line_end))
             else:
                 # Multiple matches - show options sorted by recency
                 display_error(
@@ -562,10 +618,13 @@ def handle_analyze(files: list[str], show_outline: bool, show_deps: bool, local:
     try:
         if len(resolved_files) == 1:
             # Single file
+            file_path, line_start, line_end = resolved_files[0]
             stats = analyzer.analyze_file(
-                resolved_files[0],
+                file_path,
                 show_outline=show_outline,
-                show_deps=show_deps
+                show_deps=show_deps,
+                line_start=line_start,
+                line_end=line_end
             )
             display_single_file(stats)
         else:

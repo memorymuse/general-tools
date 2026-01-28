@@ -19,6 +19,11 @@ class FileStats:
     chars: int
     words: Optional[int] = None  # For text files
 
+    # Line range (if analyzing subset of file)
+    line_start: Optional[int] = None  # 1-indexed, inclusive
+    line_end: Optional[int] = None    # 1-indexed, inclusive
+    total_lines: Optional[int] = None  # Total lines in file (when using range)
+
     # Rate calculations
     tokens_per_line_mean: Optional[float] = None
     tokens_per_line_median: Optional[int] = None
@@ -30,6 +35,11 @@ class FileStats:
 
     # Dependencies (for -d flag)
     dependencies: Optional[str] = None
+
+    @property
+    def has_line_range(self) -> bool:
+        """Check if this analysis covers only a subset of lines."""
+        return self.line_start is not None or self.line_end is not None
 
     @property
     def display_name(self) -> str:
@@ -60,7 +70,9 @@ class BaseAnalyzer(ABC):
         self,
         file_path: str,
         show_outline: bool = False,
-        show_deps: bool = False
+        show_deps: bool = False,
+        line_start: Optional[int] = None,
+        line_end: Optional[int] = None
     ) -> FileStats:
         """Analyze a file and return statistics.
 
@@ -68,6 +80,8 @@ class BaseAnalyzer(ABC):
             file_path: Path to file
             show_outline: Whether to extract structure (TOC/functions)
             show_deps: Whether to extract dependencies
+            line_start: Start line (1-indexed, inclusive). None = from beginning.
+            line_end: End line (1-indexed, inclusive). None = to end.
 
         Returns:
             FileStats object with all requested information
@@ -76,8 +90,34 @@ class BaseAnalyzer(ABC):
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
 
+        # Get all lines for potential slicing
+        all_lines = content.splitlines()
+        total_lines_in_file = len(all_lines)
+
+        # Apply line range if specified
+        has_range = line_start is not None or line_end is not None
+        if has_range:
+            # Convert to 0-indexed for slicing
+            start_idx = (line_start - 1) if line_start else 0
+            end_idx = line_end if line_end else total_lines_in_file
+
+            # Clamp to valid range
+            start_idx = max(0, min(start_idx, total_lines_in_file))
+            end_idx = max(start_idx, min(end_idx, total_lines_in_file))
+
+            # Slice lines and reconstruct content
+            lines_list = all_lines[start_idx:end_idx]
+            content = '\n'.join(lines_list)
+
+            # Store actual range used (1-indexed for display)
+            actual_start = start_idx + 1
+            actual_end = end_idx
+        else:
+            lines_list = all_lines
+            actual_start = None
+            actual_end = None
+
         # Get basic stats
-        lines_list = content.splitlines()
         stats = FileStats(
             file_path=file_path,
             file_type=self._get_type_name(),
@@ -85,6 +125,9 @@ class BaseAnalyzer(ABC):
             tokens=count_tokens(content),
             lines=len(lines_list),
             chars=len(content),
+            line_start=actual_start,
+            line_end=actual_end,
+            total_lines=total_lines_in_file if has_range else None,
         )
 
         # Calculate rates
