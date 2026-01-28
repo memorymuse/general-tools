@@ -17,7 +17,7 @@ class FileStats:
     tokens: int
     lines: int
     chars: int
-    words: Optional[int] = None  # For text files
+    size: int = 0  # File size in bytes
 
     # Line range (if analyzing subset of file)
     line_start: Optional[int] = None  # 1-indexed, inclusive
@@ -27,8 +27,6 @@ class FileStats:
     # Rate calculations
     tokens_per_line_mean: Optional[float] = None
     tokens_per_line_median: Optional[int] = None
-    words_per_line_mean: Optional[float] = None
-    words_per_line_median: Optional[int] = None
 
     # Structure (for -o flag)
     structure: Optional[str] = None
@@ -59,7 +57,7 @@ class AggregateStats:
     total_tokens: int
     total_lines: int
     total_chars: int
-    total_words: Optional[int] = None
+    total_size: int = 0  # Total size in bytes
     individual_stats: list[FileStats] = None
 
 
@@ -117,14 +115,18 @@ class BaseAnalyzer(ABC):
             actual_start = None
             actual_end = None
 
+        # Get file stat for size and mtime
+        file_stat = Path(file_path).stat()
+
         # Get basic stats
         stats = FileStats(
             file_path=file_path,
             file_type=self._get_type_name(),
-            modified_date=Path(file_path).stat().st_mtime,
+            modified_date=file_stat.st_mtime,
             tokens=count_tokens(content),
             lines=len(lines_list),
             chars=len(content),
+            size=file_stat.st_size,
             line_start=actual_start,
             line_end=actual_end,
             total_lines=total_lines_in_file if has_range else None,

@@ -89,12 +89,7 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
         table.add_column("Type", style="dim", no_wrap=True, width=12)
     table.add_column("Tokens", justify="right", style="magenta")
     table.add_column("Lines", justify="right", style="blue")
-    table.add_column("Chars", justify="right", style="green")
-
-    # Add word column if text files
-    has_words = any(s.words is not None for s in sorted_stats)
-    if has_words:
-        table.add_column("Words", justify="right", style="yellow")
+    table.add_column("Size", justify="right", style="yellow")
 
     # Add rows
     for i, stats in enumerate(sorted_stats):
@@ -120,11 +115,8 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
         row.extend([
             f"{stats.tokens:,}",
             f"{stats.lines:,}",
-            f"{stats.chars:,}",
+            format_size(stats.size),
         ])
-
-        if has_words:
-            row.append(f"{stats.words:,}" if stats.words else "-")
 
         table.add_row(*row)
 
@@ -135,12 +127,7 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
     console.print(f"\n[bold cyan]Totals ({agg_stats.file_count} files):[/]")
     console.print(f"  tokens:  [magenta]{agg_stats.total_tokens:>7,}[/]  │  "
                   f"lines:  [blue]{agg_stats.total_lines:>7,}[/]  │  "
-                  f"chars:  [green]{agg_stats.total_chars:>7,}[/]", end="")
-
-    if agg_stats.total_words is not None:
-        console.print(f"  │  words:  [yellow]{agg_stats.total_words:>7,}[/]")
-    else:
-        console.print()
+                  f"size:  [yellow]{format_size(agg_stats.total_size):>9}[/]")
 
     console.print()
 
@@ -200,31 +187,17 @@ def _display_core_stats(stats: FileStats) -> None:
     parts = [
         f"tokens:  [magenta]{stats.tokens:>7,}[/]",
         f"lines:  [blue]{stats.lines:>7,}[/]",
+        f"size:  [yellow]{format_size(stats.size):>9}[/]",
     ]
-
-    if stats.words is not None:
-        parts.append(f"words:  [yellow]{stats.words:>7,}[/]")
-
-    parts.append(f"chars:  [green]{stats.chars:>7,}[/]")
 
     console.print("  │  ".join(parts))
 
     # Build rate line
-    rate_parts = []
     if stats.tokens_per_line_mean is not None:
-        rate_parts.append(
+        console.print(
             f"tks/ln:  [magenta]{stats.tokens_per_line_mean:>5.1f}[/]  "
             f"[dim](med: {stats.tokens_per_line_median})[/]"
         )
-
-    if stats.words_per_line_mean is not None:
-        rate_parts.append(
-            f"words/ln:  [yellow]{stats.words_per_line_mean:>5.1f}[/]  "
-            f"[dim](med: {stats.words_per_line_median})[/]"
-        )
-
-    if rate_parts:
-        console.print("  │  ".join(rate_parts))
 
 
 def shorten_path(path: str, max_length: int = 50) -> str:

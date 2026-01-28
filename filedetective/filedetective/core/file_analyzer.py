@@ -113,17 +113,13 @@ class FileAnalyzer:
         total_tokens = sum(s.tokens for s in individual_stats)
         total_lines = sum(s.lines for s in individual_stats)
         total_chars = sum(s.chars for s in individual_stats)
-
-        # Word count (if text files)
-        total_words = None
-        if any(s.words is not None for s in individual_stats):
-            total_words = sum(s.words for s in individual_stats if s.words is not None)
+        total_size = sum(s.size for s in individual_stats)
 
         return AggregateStats(
             file_count=len(individual_stats),
             total_tokens=total_tokens,
             total_lines=total_lines,
             total_chars=total_chars,
-            total_words=total_words,
+            total_size=total_size,
             individual_stats=individual_stats
         )
