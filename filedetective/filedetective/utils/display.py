@@ -89,6 +89,7 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
         table.add_column("Type", style="dim", no_wrap=True, width=12)
     table.add_column("Tokens", justify="right", style="magenta")
     table.add_column("Lines", justify="right", style="blue")
+    table.add_column("Chars", justify="right", style="green")
     table.add_column("Size", justify="right", style="yellow")
 
     # Add rows
@@ -115,6 +116,7 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
         row.extend([
             f"{stats.tokens:,}",
             f"{stats.lines:,}",
+            f"{stats.chars:,}",
             format_size(stats.size),
         ])
 
@@ -127,6 +129,7 @@ def display_multiple_files(agg_stats: AggregateStats) -> None:
     console.print(f"\n[bold cyan]Totals ({agg_stats.file_count} files):[/]")
     console.print(f"  tokens:  [magenta]{agg_stats.total_tokens:>7,}[/]  │  "
                   f"lines:  [blue]{agg_stats.total_lines:>7,}[/]  │  "
+                  f"chars:  [green]{agg_stats.total_chars:>7,}[/]  │  "
                   f"size:  [yellow]{format_size(agg_stats.total_size):>9}[/]")
 
     console.print()
@@ -187,6 +190,7 @@ def _display_core_stats(stats: FileStats) -> None:
     parts = [
         f"tokens:  [magenta]{stats.tokens:>7,}[/]",
         f"lines:  [blue]{stats.lines:>7,}[/]",
+        f"chars:  [green]{stats.chars:>7,}[/]",
         f"size:  [yellow]{format_size(stats.size):>9}[/]",
     ]
 
