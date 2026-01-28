@@ -23,6 +23,7 @@ filedet <file(s)> [flags]
 filedet find <pattern>
 filedet grep <term> <directory>
 filedet hist [directory] [-n COUNT] [-ft EXT...]
+filedet reinstall                 # Rebuild and reinstall from source
 
 # Development (run without installing)
 python3 -m filedetective <args>
@@ -32,6 +33,8 @@ pytest tests/
 ```
 
 **IMPORTANT**: Always use `uv tool install`, never `pip install`. This project uses uv for dependency management.
+
+**Reinstalling after code changes**: Run `filedet reinstall` from anywhere. This cleans the uv cache and reinstalls from source. If uv cache issues persist, manually run `uv cache clean` first.
 
 ## Usage Examples
 
@@ -59,7 +62,8 @@ Output shows the range and context:
 File: storage.py:10-50 (~/projects/.../storage.py)
 Lines: 10-50 (41 of 342 total)
 
-tokens:    247  │  lines:     41  │  size:   1.8 KB
+tokens:    247  │  lines:     41  │  chars:   1,823  │  size:   1.8 KB
+tks/ln:    6.0  (med: 5.0)  │  chars/ln:   44.5  (med: 48.0)
 ```
 
 ### Analyze Directories
@@ -155,8 +159,8 @@ File: storage.py (~/projects/muse-v1/core/storage.py)
 Modified: 25.11.04 14:32
 Type: Python
 
-tokens:  1,247  │  lines:    342  │  size:   8.7 KB
-tks/ln:    3.6  (med: 3)
+tokens:  1,247  │  lines:    342  │  chars:   8,934  │  size:   8.7 KB
+tks/ln:    3.6  (med: 3.0)  │  chars/ln:   26.1  (med: 32.0)
 ```
 
 ### With Structure (`-o`)
@@ -179,16 +183,16 @@ Structure:
 ```
 Analyzed 3 files:
 
-┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━━┓
-┃ File                  ┃ Type       ┃ Tokens ┃ Lines ┃    Size ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━━┩
-│ storage.py [largest]  │ Python     │  1,247 │   342 │  8.7 KB │
-│ config.yaml           │ Text       │     56 │    13 │  183.0 B│
-│ README.md [smallest]  │ Markdown   │     42 │    15 │  181.0 B│
-└───────────────────────┴────────────┴────────┴───────┴─────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━┳━━━━━━━━┳━━━━━━━━━┓
+┃ File                  ┃ Type       ┃ Tokens ┃ Lines ┃  Chars ┃    Size ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━╇━━━━━━━━╇━━━━━━━━━┩
+│ storage.py [largest]  │ Python     │  1,247 │   342 │  8,934 │  8.7 KB │
+│ config.yaml           │ Text       │     56 │    13 │    183 │  183.0 B│
+│ README.md [smallest]  │ Markdown   │     42 │    15 │    181 │  181.0 B│
+└───────────────────────┴────────────┴────────┴───────┴────────┴─────────┘
 
 Totals (3 files):
-  tokens:  1,345  │  lines:    370  │  size:    9.1 KB
+  tokens:  1,345  │  lines:    370  │  chars:   9,298  │  size:    9.1 KB
 ```
 
 **Note:** Type column only appears when file types are mixed. For files of the same type, the column is hidden.
@@ -208,55 +212,64 @@ Recent files in ~/projects/myapp (15 shown)
 
 ## Repository Structure
 
-**IMPORTANT: Nested directory structure explained.**
+### CRITICAL: Nested Directory Structure
 
-This repo uses standard Python packaging: the outer `filedetective/` is the repository, the inner `filedetective/` is the installable package. This is NOT a mistake.
+This repo has **two directories named `filedetective`**. This is intentional and standard Python packaging:
 
 ```
-filedetective/                    # ← REPOSITORY ROOT (you are here)
+filedetective/                    # ← REPOSITORY ROOT (clone lands here)
 ├── CLAUDE.md                     # This file
 ├── README.md
-├── pyproject.toml                # Package configuration (defines 'filedet' CLI entry point)
-├── config.yaml                   # Search directories, skip patterns, defaults
-├── filedetective/                # ← PYTHON PACKAGE (what gets installed)
+├── pyproject.toml                # Package config (defines 'filedet' entry point)
+├── config.yaml                   # Search directories config
+│
+├── filedetective/                # ← PYTHON PACKAGE (edit code HERE)
 │   ├── __init__.py
-│   ├── __main__.py               # Entry point for `python -m filedetective`
-│   ├── cli.py                    # CLI argument parsing, command dispatch
+│   ├── __main__.py               # Entry: `python -m filedetective`
+│   ├── cli.py                    # CLI parsing, command dispatch
 │   ├── config.yaml               # Package-local config copy
 │   ├── core/
-│   │   ├── file_finder.py        # Priority-based file discovery, pattern matching
-│   │   ├── file_analyzer.py      # Dispatch to type-specific analyzers
-│   │   ├── history.py            # HistoryFinder for recent files (hist command)
-│   │   ├── git_utils.py          # Git status and commit info utilities
-│   │   └── tokenizer.py          # tiktoken wrapper with fallback
+│   │   ├── file_finder.py        # File discovery, pattern matching
+│   │   ├── file_analyzer.py      # Dispatch to analyzers
+│   │   ├── history.py            # hist command
+│   │   ├── git_utils.py          # Git status utilities
+│   │   └── tokenizer.py          # Token counting
 │   ├── analyzers/
-│   │   ├── base_analyzer.py      # Abstract base with FileStats/AggregateStats dataclasses
-│   │   ├── text_analyzer.py      # Plain text analysis
-│   │   ├── markdown_analyzer.py  # TOC extraction from headers
-│   │   ├── python_analyzer.py    # AST-based function/class extraction
-│   │   └── javascript_analyzer.py # Regex-based extraction for JS/TS
+│   │   ├── base_analyzer.py      # FileStats/AggregateStats dataclasses
+│   │   ├── text_analyzer.py      # Plain text
+│   │   ├── markdown_analyzer.py  # TOC extraction
+│   │   ├── python_analyzer.py    # AST-based (Python)
+│   │   └── javascript_analyzer.py # Regex-based (JS/TS)
 │   └── utils/
-│       ├── file_utils.py         # FileType enum, type detection
-│       └── display.py            # Rich-based output formatting
-├── tests/                        # Test directory (pytest)
-│   ├── fixtures/                 # Sample files for testing
-│   └── test_file_analyzer.py
-└── build/                        # Build artifacts (gitignored)
+│       ├── file_utils.py         # FileType enum
+│       └── display.py            # Rich output formatting
+│
+├── tests/                        # pytest tests
+└── build/                        # Build artifacts (stale - delete if issues)
 ```
 
-**Why nested same-name directories?**
-- `uv tool install .` installs the inner `filedetective/` package
-- `python -m filedetective` works because of `__main__.py` in the package
-- Keeps repo files (README, pyproject.toml, tests/) separate from package code
-- This is standard Python packaging convention
+### Agent Navigation Guide
 
-**Running the tool:**
+**When editing code, ALWAYS use paths starting with `filedetective/` (the inner package):**
+```
+✓ filedetective/cli.py              # Correct - edits the package
+✓ filedetective/utils/display.py    # Correct
+✗ cli.py                            # Wrong - doesn't exist at repo root
+✗ utils/display.py                  # Wrong - doesn't exist at repo root
+```
+
+**Common pitfalls:**
+1. **Editing wrong location**: There are NO `.py` files at the repo root. All code is inside `filedetective/`.
+2. **Stale build directory**: If changes aren't taking effect after reinstall, delete `build/` and any `*.egg-info` directories, then run `uv cache clean` before reinstalling.
+3. **Finding files**: Use `ls filedetective/` to see package contents, not `ls`.
+
+**Running during development:**
 ```bash
+# From repo root - runs source directly (no install needed)
+python3 -m filedetective <args>
+
 # After installing with uv
 filedet <args>
-
-# Development (without installing)
-python3 -m filedetective <args>
 ```
 
 ## Architecture
